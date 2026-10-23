@@ -11,6 +11,7 @@ class DoorLockState {
   final DateTime lastUpdated;
   final bool isActionPending;
   final String? pendingActionMessage;
+  final String? lastProcessedCommandId;
 
   const DoorLockState({
     required this.lockStatus,
@@ -22,6 +23,7 @@ class DoorLockState {
     required this.lastUpdated,
     this.isActionPending = false,
     this.pendingActionMessage,
+    this.lastProcessedCommandId,
   });
 
   bool get isLocked => lockStatus == LockStatus.locked;
@@ -42,6 +44,44 @@ class DoorLockState {
     );
   }
 
+  Map<String, dynamic> toJson() {
+    return {
+      'isLocked': isLocked,
+      'doorClosed': doorClosed,
+      'isOnline': isOnline,
+      'burglarAlarmActive': burglarAlarmActive,
+      'isLockout': isLockout,
+      'lastMethod': lastMethod,
+      'lastUpdated': lastUpdated.millisecondsSinceEpoch,
+      'lastProcessedCommandId': lastProcessedCommandId,
+    };
+  }
+
+  factory DoorLockState.fromJson(Map<dynamic, dynamic> json) {
+    final locked = json['isLocked'] as bool?;
+    LockStatus status;
+    if (locked == true) {
+      status = LockStatus.locked;
+    } else if (locked == false) {
+      status = LockStatus.unlocked;
+    } else {
+      status = LockStatus.unknown;
+    }
+
+    return DoorLockState(
+      lockStatus: status,
+      doorClosed: json['doorClosed'] as bool? ?? true,
+      isOnline: json['isOnline'] as bool? ?? false,
+      burglarAlarmActive: json['burglarAlarmActive'] as bool? ?? false,
+      isLockout: json['isLockout'] as bool? ?? false,
+      lastMethod: json['lastMethod'] as String? ?? 'sensor',
+      lastUpdated: json['lastUpdated'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(json['lastUpdated'] as int)
+          : DateTime.now(),
+      lastProcessedCommandId: json['lastProcessedCommandId'] as String?,
+    );
+  }
+
   DoorLockState copyWith({
     LockStatus? lockStatus,
     bool? doorClosed,
@@ -52,6 +92,7 @@ class DoorLockState {
     DateTime? lastUpdated,
     bool? isActionPending,
     String? pendingActionMessage,
+    String? lastProcessedCommandId,
   }) {
     return DoorLockState(
       lockStatus: lockStatus ?? this.lockStatus,
@@ -63,6 +104,7 @@ class DoorLockState {
       lastUpdated: lastUpdated ?? this.lastUpdated,
       isActionPending: isActionPending ?? this.isActionPending,
       pendingActionMessage: pendingActionMessage,
+      lastProcessedCommandId: lastProcessedCommandId ?? this.lastProcessedCommandId,
     );
   }
 }
