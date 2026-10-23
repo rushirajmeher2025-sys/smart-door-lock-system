@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
+import '../services/firebase_init.dart';
 import '../theme/app_colors.dart';
 import '../utils/constants.dart';
 
@@ -111,8 +113,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(ctx).pop();
+              try {
+                if (FirebaseInitService.isConfigured) {
+                  await AuthService.instance.signOut();
+                }
+              } catch (_) {}
+              if (!mounted) return;
               Navigator.of(context).pushReplacementNamed(AppConstants.routeLogin);
             },
             style: ElevatedButton.styleFrom(
@@ -157,18 +165,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: const Icon(Icons.person_rounded, color: AppColors.primaryLight, size: 28),
                 ),
                 const SizedBox(width: 14),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      const Text(
                         'Master Administrator',
                         style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
                       ),
-                      SizedBox(height: 2),
+                      const SizedBox(height: 2),
                       Text(
-                        'rushi.rajmeher2025@vitstudent.ac.in',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                        AuthService.instance.currentUser?.email ?? 'rushi.rajmeher2025@vitstudent.ac.in',
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                       ),
                     ],
                   ),

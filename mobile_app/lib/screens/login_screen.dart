@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
+import '../services/firebase_init.dart';
 import '../theme/app_colors.dart';
 import '../utils/constants.dart';
 
@@ -42,76 +44,153 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
-    // Simulate authentication network latency for UI testing
-    await Future.delayed(const Duration(milliseconds: 900));
-
-    if (!mounted) return;
-
-    setState(() {
-      _isLoading = false;
-    });
-
-    // Navigate to Main Dashboard
-    Navigator.of(context).pushReplacementNamed(AppConstants.routeHome);
+    try {
+      if (FirebaseInitService.isConfigured) {
+        if (_isRegisterMode) {
+          await AuthService.instance.registerWithEmailAndPassword(
+            email: _emailController.text,
+            password: _passwordController.text,
+          );
+        } else {
+          await AuthService.instance.signInWithEmailAndPassword(
+            email: _emailController.text,
+            password: _passwordController.text,
+          );
+        }
+        // AuthGate will automatically redirect upon auth state stream update
+      } else {
+        // Fallback for local demo mode
+        await Future.delayed(const Duration(milliseconds: 900));
+        if (!mounted) return;
+        Navigator.of(context).pushReplacementNamed(AppConstants.routeHome);
+      }
+    } on AuthException catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.message;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString();
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   void _showForgotPasswordDialog() {
     final resetEmailController = TextEditingController(text: _emailController.text);
+    bool isResetting = false;
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: AppColors.border),
-        ),
-        title: const Text(
-          'Reset Password',
-          style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Enter your registered email address to receive password reset instructions.',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            backgroundColor: AppColors.card,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AppColors.border),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: resetEmailController,
-              keyboardType: TextInputType.emailAddress,
-              style: const TextStyle(color: AppColors.textPrimary),
-              decoration: const InputDecoration(
-                labelText: 'Email Address',
-                hintText: 'name@example.com',
-                prefixIcon: Icon(Icons.email_outlined, color: AppColors.textSecondary),
-              ),
+            title: const Text(
+              'Reset Password',
+              style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Password reset instructions sent to ${resetEmailController.text}'),
-                  backgroundColor: AppColors.surfaceLight,
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Enter your registered email address to receive password reset instructions.',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                 ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              minimumSize: const Size(100, 40),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: resetEmailController,
+                  keyboardType: TextInputType.emailAddress,
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  decoration: const InputDecoration(
+                    labelText: 'Email Address',
+                    hintText: 'name@example.com',
+                    prefixIcon: Icon(Icons.email_outlined, color: AppColors.textSecondary),
+                  ),
+                ),
+              ],
             ),
-            child: const Text('Send Link'),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+              ),
+              ElevatedButton(
+                onPressed: isResetting
+                    ? null
+                    : () async {
+                        final email = resetEmailController.text.trim();
+                        if (email.isEmpty || !email.contains('@')) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Please enter a valid email address'),
+                              backgroundColor: AppColors.alarm,
+                            ),
+                          );
+                          return;
+                        }
+
+                        setDialogState(() => isResetting = true);
+                        final messenger = ScaffoldMessenger.of(context);
+                        final navigator = Navigator.of(ctx);
+
+                        try {
+                          if (FirebaseInitService.isConfigured) {
+                            await AuthService.instance.sendPasswordResetEmail(email);
+                          } else {
+                            await Future.delayed(const Duration(milliseconds: 600));
+                          }
+
+                          if (!mounted) return;
+                          navigator.pop();
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text('Password reset instructions sent to $email'),
+                              backgroundColor: AppColors.surfaceLight,
+                            ),
+                          );
+                        } on AuthException catch (e) {
+                          setDialogState(() => isResetting = false);
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text(e.message),
+                              backgroundColor: AppColors.alarm,
+                            ),
+                          );
+                        }
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  minimumSize: const Size(100, 40),
+                ),
+                child: isResetting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Text('Send Link'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -189,7 +268,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         Expanded(
                           child: GestureDetector(
-                            onTap: () => setState(() => _isRegisterMode = false),
+                            onTap: () => setState(() {
+                              _isRegisterMode = false;
+                              _errorMessage = null;
+                            }),
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 10),
                               decoration: BoxDecoration(
@@ -210,7 +292,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         Expanded(
                           child: GestureDetector(
-                            onTap: () => setState(() => _isRegisterMode = true),
+                            onTap: () => setState(() {
+                              _isRegisterMode = true;
+                              _errorMessage = null;
+                            }),
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 10),
                               decoration: BoxDecoration(
@@ -378,7 +463,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Phase 2 Mock Indicator
+                  // Status indicator
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -386,14 +471,20 @@ class _LoginScreenState extends State<LoginScreen> {
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: AppColors.border),
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
-                        Icon(Icons.developer_mode_rounded, size: 18, color: AppColors.accent),
-                        SizedBox(width: 10),
+                        Icon(
+                          FirebaseInitService.isConfigured ? Icons.cloud_done_rounded : Icons.info_outline,
+                          size: 18,
+                          color: FirebaseInitService.isConfigured ? AppColors.unlocked : AppColors.accent,
+                        ),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Demo / Mock UI Mode: Validation & screens active. Enter any valid email & 6+ char password.',
-                            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                            FirebaseInitService.isConfigured
+                                ? 'Firebase Auth Active. Authentication is handled by Firebase Cloud.'
+                                : 'Demo Mode Active. Enter any valid email & 6+ char password to test.',
+                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                           ),
                         ),
                       ],

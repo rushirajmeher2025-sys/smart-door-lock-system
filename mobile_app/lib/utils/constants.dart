@@ -12,6 +12,7 @@ class AppConstants {
   static const int maxPinLength = 8;
 
   // Route Names
+  static const String routeGate = '/';
   static const String routeLogin = '/login';
   static const String routeHome = '/home';
   static const String routeDashboard = '/dashboard';
