@@ -1,0 +1,736 @@
+SMART DOOR LOCK SYSTEM
+ANTIGRAVITY PHASE-WISE IMPLEMENTATION PROMPTS
+
+PURPOSE
+Use these prompts with Antigravity to build the Smart Door Lock System mobile application and integrate it with the existing ESP32 firmware, Firebase, and GSM SMS alerts.
+
+IMPORTANT WORKFLOW
+- Give Antigravity one phase at a time.
+- Review the changes and test each phase before moving to the next.
+- Do not assume a feature works unless it has been tested.
+- Keep backups or use version control before changing firmware.
+- Do not assume the project deadline from dates mentioned in the project documentation.
+- Confirm the exact GSM modem model before implementing its wiring or code.
+
+PLANNED ARCHITECTURE
+- Mobile application: Flutter + Dart
+- Authentication: Firebase Authentication
+- Database: Firebase Realtime Database
+- Hardware: Existing ESP32 smart door lock
+- Firmware: Arduino C++
+- SMS notifications: GSM modem connected to the ESP32
+- Development: Antigravity with Flutter and Android development tools configured
+
+============================================================
+PHASE 0 — ANALYZE THE EXISTING PROJECT
+============================================================
+
+You are working on my Smart Door Lock System project.
+
+Before writing or modifying any code, carefully inspect the existing project files and understand the current implementation.
+
+Project context:
+- The lock uses an ESP32.
+- The existing firmware is written in Arduino C++.
+- Authentication currently uses a physical keypad and PIN.
+- The system controls a servo motor to lock and unlock the door.
+- A door sensor detects whether the door is open or closed.
+- An OLED displays system information.
+- A buzzer and LEDs provide feedback.
+- The firmware includes failed-PIN handling, a lockout mechanism, intrusion detection, and automatic relocking.
+- The project documentation describes a future mobile application and cloud integration.
+- I also plan to integrate a GSM modem to send SMS alerts to registered phone numbers.
+
+Your tasks:
+1. Inspect all existing project files, especially the Arduino firmware, configuration files, and project PDF.
+2. Identify the existing hardware pins, functions, state variables, authentication logic, and safety mechanisms.
+3. Identify discrepancies between the documentation and the actual firmware.
+4. Determine whether a Flutter project already exists.
+5. Identify the software and dependencies installed in the current environment.
+6. Propose a suitable project folder structure for the Flutter application, Firebase integration, and ESP32 firmware.
+7. Create a clear implementation plan divided into independently testable phases.
+8. Identify missing information that must be confirmed before implementing hardware-dependent functionality.
+
+Important constraints:
+- Do not rewrite the existing firmware during this phase.
+- Do not delete, rename, or overwrite existing files.
+- Do not invent hardware pins or assume a GSM modem model.
+- Do not claim that Firebase, Flutter, or hardware is configured unless you verify it.
+- Preserve all existing keypad functionality and security mechanisms.
+- Clearly distinguish existing functionality from planned functionality.
+
+Deliverables:
+- A summary of the existing system.
+- A list of confirmed hardware and software details.
+- A list of inconsistencies and unresolved questions.
+- The proposed folder structure.
+- A phase-wise implementation plan.
+- A list of commands needed to verify the development environment.
+
+Stop after completing the analysis. Wait for my approval before implementing anything.
+
+============================================================
+PHASE 1 — DEVELOPMENT ENVIRONMENT AND FLUTTER SETUP
+============================================================
+
+Implement Phase 1 of my Smart Door Lock System project.
+
+First, inspect the results of Phase 0 and reuse the approved architecture.
+
+Objective:
+Prepare a working Flutter application environment for the smart door lock mobile app.
+
+Tasks:
+1. Verify whether Flutter, Dart, Git, and the Android development tools are installed.
+2. Check the Flutter environment using the appropriate diagnostic commands.
+3. If Flutter is missing, explain the required installation steps instead of assuming it is available.
+4. Create a Flutter application in a dedicated application directory.
+5. Do not overwrite my existing Arduino firmware, configuration files, PDF documentation, or unrelated projects.
+6. Configure Android support.
+7. Organize the application using a maintainable folder structure.
+
+Use a structure similar to:
+
+lib/
+  main.dart
+  app/
+  models/
+  screens/
+  widgets/
+  services/
+  repositories/
+  providers/
+  utils/
+  theme/
+
+Adapt the structure if a simpler approach is more suitable.
+
+Create:
+- An application entry point.
+- A consistent theme.
+- A navigation structure.
+- Placeholder screens for Login, Dashboard, Activity History, and Settings.
+- A reusable loading indicator.
+- A reusable error-message component.
+
+Requirements:
+- Use null-safe Dart.
+- Keep widgets and business logic separate.
+- Avoid unnecessary dependencies.
+- Do not add fake Firebase functionality.
+- Do not implement remote locking yet.
+- Ensure the application can launch on an Android emulator or compatible Android device.
+
+Testing:
+- Run Flutter diagnostics.
+- Run dependency resolution.
+- Analyze the Dart code.
+- Launch the application if the environment supports it.
+
+At the end, report the files created, commands executed, errors encountered, and tests completed.
+
+Do not proceed to Phase 2 until I approve this phase.
+
+============================================================
+PHASE 2 — MOBILE APP UI/UX
+============================================================
+
+Implement Phase 2: the complete user interface for my Smart Door Lock System mobile application.
+
+Use the Flutter project created in Phase 1.
+
+Design objective:
+Create a modern, polished, professional smart-home security application that is simple enough to operate quickly during an emergency.
+
+Design direction:
+- Clean, modern interface.
+- Consistent spacing, typography, icons, and colors.
+- A professional security-focused visual identity.
+- Responsive layouts for different Android screen sizes.
+- Accessible text sizes and button dimensions.
+- Clear visual feedback for loading, success, failure, and warnings.
+- Avoid excessive animations and unnecessary visual clutter.
+
+Create the following screens.
+
+1. LOGIN SCREEN
+- Email and password fields.
+- Show/hide password control.
+- Login button.
+- Validation messages.
+- Loading indicator.
+- Forgot-password option.
+- Registration option if registration is enabled for this project.
+
+2. MAIN DASHBOARD
+- Door status: Open or Closed.
+- Lock status: Locked, Unlocked, or Unknown.
+- Online/offline connection indicator.
+- Last successful status update.
+- Large Lock and Unlock controls.
+- Clear indication when an action is pending.
+- Recent security events.
+- Navigation to Activity History and Settings.
+
+3. ACTIVITY HISTORY
+- Display security events in chronological order.
+- Show event type, timestamp, and relevant details.
+- Visually distinguish security warnings from normal events.
+- Support loading, empty, and error states.
+
+4. SETTINGS
+- Account information.
+- Notification preferences.
+- Registered alert phone numbers, if supported by the planned backend.
+- Logout button.
+- Application information.
+
+5. LOCK COMMAND CONFIRMATION
+- Provide an appropriate confirmation or safety message before issuing a remote command.
+- Show whether the operation succeeded, failed, or remains pending.
+- Never display a successful physical operation merely because a button was pressed.
+
+Important:
+At this stage, use clearly separated mock repositories or development-only sample data where necessary.
+
+Do not present mock data as actual hardware status.
+Do not connect the lock buttons to real hardware yet.
+Do not add hardcoded credentials or secrets.
+
+Implementation requirements:
+- Use reusable widgets.
+- Keep screen files manageable.
+- Maintain consistent navigation.
+- Handle different screen sizes.
+- Ensure the interface works on both small and large Android screens.
+- Avoid modifying the existing Arduino firmware.
+
+Testing:
+Run static analysis and resolve relevant errors.
+Test navigation between every screen.
+Check loading, empty, error, and disconnected states.
+
+Complete Phase 2 and wait for my approval before proceeding.
+
+============================================================
+PHASE 3 — FIREBASE AUTHENTICATION
+============================================================
+
+Implement Phase 3 of my Smart Door Lock System application.
+
+Objective:
+Integrate Firebase Authentication into the Flutter application.
+
+Before making changes:
+Inspect the existing application and determine whether a Firebase project has already been configured.
+
+Tasks:
+1. Configure FlutterFire using the official setup workflow if required.
+2. Connect the application to my Firebase project.
+3. Implement email-and-password authentication.
+4. Implement login and logout.
+5. Implement password-reset functionality.
+6. Handle invalid credentials, network errors, disabled accounts, and other relevant authentication failures.
+7. Persist authentication state using Firebase Authentication.
+8. Redirect authenticated users to the dashboard.
+9. Redirect unauthenticated users to the login screen.
+10. Add loading states and user-friendly error messages.
+
+Security requirements:
+- Never hardcode passwords, private keys, service-account credentials, or administrative secrets.
+- Do not store plaintext passwords in Firebase Realtime Database.
+- Do not assume that any authenticated user is authorized to control every lock.
+- Prepare the application for device-specific authorization in later phases.
+- Do not store security-critical information in local preferences as a substitute for backend authorization.
+
+Testing:
+- Test successful login.
+- Test incorrect credentials.
+- Test logout.
+- Test session restoration.
+- Test password reset.
+- Test behavior during network failure.
+
+If Firebase configuration or credentials are unavailable, explain exactly what I need to configure manually.
+
+Do not create a fake authentication system to simulate Firebase.
+
+Finish Phase 3 and wait for my approval.
+
+============================================================
+PHASE 4 — FIREBASE DATABASE AND SECURITY RULES
+============================================================
+
+Implement Phase 4 of my Smart Door Lock System project.
+
+Objective:
+Design and configure the Firebase Realtime Database structure for communication between the Flutter application and ESP32.
+
+First, inspect the existing Firebase configuration and authentication implementation.
+
+Propose a database structure containing the following logical sections:
+
+devices/{deviceId}/status
+devices/{deviceId}/commands
+devices/{deviceId}/events
+devices/{deviceId}/metadata
+
+The exact schema may be adjusted if necessary, but it must clearly separate physical status, requested commands, security events, and device metadata.
+
+STATUS:
+Represent the latest reported physical state, including:
+- Lock state.
+- Door state.
+- Device connectivity or heartbeat.
+- Last state update timestamp.
+- Last processed command identifier, where appropriate.
+
+COMMANDS:
+Represent requests such as:
+- Lock.
+- Unlock.
+- Command identifier.
+- Request timestamp.
+- Requesting user identifier.
+- Processing status.
+- Result or failure reason.
+
+EVENTS:
+Represent events such as:
+- Incorrect PIN attempts.
+- Failed-authentication lockout.
+- Door opened while locked.
+- Door left open.
+- Successful lock or unlock operations.
+- Device disconnection or reconnection.
+- GSM notification attempts and outcomes, where supported.
+
+SECURITY:
+- Authenticated users must not automatically gain access to every device.
+- Enforce device-specific authorization.
+- Prevent ordinary users from writing arbitrary physical status values.
+- Prevent unauthorized users from creating commands.
+- Restrict access to security event history.
+- Avoid relying on hidden buttons or client-side checks for security.
+- Design database rules according to the actual command-processing architecture.
+- Use trusted server-side logic where necessary to authorize sensitive operations.
+- Never put administrative credentials inside the Flutter application or ESP32 firmware.
+
+Also:
+1. Document each field and its purpose.
+2. Specify which component may read or write each section.
+3. Configure Firebase Security Rules.
+4. Test the rules using the Firebase Emulator Suite if available.
+5. Avoid storing unnecessary personal information.
+6. Define how timestamps are generated and interpreted.
+
+Do not connect real lock commands yet.
+
+Deliver the schema, rules, configuration instructions, and test results.
+
+Stop after Phase 4.
+
+============================================================
+PHASE 5 — CONNECT THE APP TO LIVE DEVICE STATUS
+============================================================
+
+Implement Phase 5 of my Smart Door Lock System.
+
+Objective:
+Replace dashboard mock data with real-time Firebase data.
+
+Tasks:
+1. Create a dedicated device-status repository.
+2. Subscribe to authorized device status updates.
+3. Display the latest reported door state.
+4. Display the latest reported lock state.
+5. Display device connectivity.
+6. Show the last update timestamp.
+7. Handle missing, malformed, delayed, and stale status data.
+8. Handle Firebase permission errors.
+9. Clean up stream subscriptions when screens or sessions are disposed.
+10. Update the dashboard without requiring manual refresh.
+
+Important behavior:
+- If the ESP32 is offline, show that its status cannot currently be confirmed.
+- If the status is stale, display a warning.
+- Do not automatically assume the lock is locked or unlocked when the device is unreachable.
+- Do not equate a successful Firebase write with a successful physical operation.
+- Do not use mock values in production.
+- Keep physical status separate from requested commands.
+
+If the ESP32 is not yet connected to Firebase, provide a clearly labeled development mode to test the interface.
+
+Testing:
+- Test incoming status changes.
+- Test disconnection.
+- Test missing status.
+- Test stale status.
+- Test permission errors.
+
+Complete this phase and wait for my approval.
+
+============================================================
+PHASE 6 — CONNECT ESP32 TO FIREBASE
+============================================================
+
+Implement Phase 6 of my Smart Door Lock System.
+
+Objective:
+Integrate the existing ESP32 firmware with Firebase so the mobile application can receive genuine hardware status.
+
+Before editing:
+- Read the existing Arduino firmware.
+- Read the configuration header.
+- Identify all current GPIO assignments.
+- Identify the existing keypad, servo, door sensor, OLED, buzzer, LEDs, and authentication logic.
+- Preserve all working functionality.
+
+Tasks:
+1. Select a Firebase communication method compatible with the actual ESP32 environment.
+2. Verify the required libraries and their compatibility.
+3. Configure the ESP32 to connect to the intended network.
+4. Establish authenticated communication with Firebase.
+5. Report the actual lock state.
+6. Report the actual door-sensor state.
+7. Report a device heartbeat.
+8. Record relevant security events.
+9. Report command-processing results when commands are introduced in the next phase.
+10. Handle network disconnection and reconnection.
+11. Ensure the existing keypad continues to work when the internet is unavailable.
+
+Security and reliability:
+- Do not remove or weaken existing PIN authentication.
+- Do not block the main security loop while waiting for network requests.
+- Avoid lengthy network operations inside time-sensitive sensor and alarm handling.
+- Do not allow cloud connectivity failures to disable local access control.
+- Do not report a lock operation as successful until the physical operation has been verified as far as the available hardware permits.
+- Do not expose administrative Firebase credentials.
+- Use a suitable device-authentication and authorization approach.
+- Document any credential provisioning that must be performed manually.
+
+Important:
+Do not assume that an existing firmware library is compatible with the selected Firebase implementation. Verify compatibility before choosing the integration method.
+
+Keep the current hardware configuration unchanged unless a modification is necessary and approved.
+
+Testing:
+- Test local keypad operation without internet.
+- Test status reporting when connected.
+- Test Wi-Fi disconnection and recovery.
+- Test door-sensor updates.
+- Test lock-state reporting.
+
+If the hardware is unavailable, clearly distinguish compilation tests from physical hardware tests.
+
+Complete Phase 6 and wait for approval.
+
+============================================================
+PHASE 7 — REMOTE LOCK AND UNLOCK
+============================================================
+
+Implement Phase 7 of my Smart Door Lock System.
+
+Objective:
+Implement secure remote lock and unlock commands from the Flutter application through Firebase to the ESP32.
+
+Required command flow:
+1. The user signs in.
+2. The app verifies that the user is authorized for the specific device.
+3. The user requests a lock or unlock operation.
+4. The backend validates the request and creates an authorized command.
+5. The ESP32 receives the command.
+6. The ESP32 validates the command identifier, authorization information, freshness, and processing status.
+7. The ESP32 independently checks the current door state and all applicable local safety conditions.
+8. The ESP32 decides whether the operation is permitted.
+9. If permitted, the ESP32 actuates the servo.
+10. The ESP32 verifies the resulting state as far as the hardware allows.
+11. The ESP32 records the command result.
+12. The app displays the confirmed result.
+
+Safety requirements:
+- Never unlock the door solely because a client writes an arbitrary value to Firebase.
+- Do not treat a cloud command as an unconditional instruction to move the servo.
+- Do not bypass existing local security logic.
+- Reject unauthorized, expired, duplicated, malformed, or already processed commands.
+- Prevent a command from being executed repeatedly after reconnection.
+- Keep local keypad access functional when the network is unavailable.
+- If the door is open, apply the existing safety rules and explicitly report whether the requested operation is allowed.
+- Do not assume the door sensor alone can verify the bolt position.
+- Display Pending, Succeeded, Rejected, Failed, or Timed Out as appropriate.
+- Never show success merely because the request was submitted.
+- Provide a clear reason when an operation is rejected.
+
+Implementation:
+- Create a dedicated command service in Flutter.
+- Implement backend authorization and command creation.
+- Implement command handling in the ESP32 firmware.
+- Maintain a command identifier for each operation.
+- Record processing results.
+- Handle timeouts and communication failures.
+- Keep the existing keypad and intrusion-alarm logic intact.
+
+Testing:
+Test unauthorized access, valid commands, duplicate commands, expired commands, door-open conditions, network loss, and recovery.
+
+Do not claim physical safety or successful actuation without the relevant verification.
+
+Complete Phase 7 and wait for approval.
+
+============================================================
+PHASE 8 — GSM SMS ALERTS
+============================================================
+
+Implement Phase 8 of my Smart Door Lock System.
+
+Objective:
+Add GSM-based SMS notifications to the existing ESP32 smart door lock.
+
+The GSM modem will send alerts directly to configured phone numbers when suspicious activity occurs.
+
+Before implementation:
+1. Ask me to confirm the exact GSM modem model.
+2. Confirm its supported network technology and local network availability.
+3. Verify its supply-voltage and current requirements.
+4. Confirm the modem's UART interface and proposed ESP32 GPIO assignments.
+5. Check whether any existing pins conflict with the proposed connections.
+6. Do not generate final wiring instructions until the modem model is confirmed.
+
+Planned alert events:
+- Three consecutive incorrect PIN attempts.
+- Security lockout triggered by failed authentication.
+- Door opened while the system is locked.
+- Repeated suspicious access attempts.
+- Other serious security events supported by the existing firmware.
+
+Optional alerts may include:
+- Door left open for an extended period.
+- Device disconnection.
+- Successful remote unlock.
+- Repeated GSM delivery failures.
+
+Architecture:
+- The ESP32 detects security events locally.
+- A separate GSM notification manager handles SMS delivery.
+- The GSM modem communicates with the ESP32 through a compatible UART connection.
+- SMS messages are sent to configured recipient numbers.
+- Firebase may record notification events for the mobile application's history.
+
+Implementation requirements:
+1. Preserve all existing security functionality.
+2. Use nonblocking or carefully bounded notification processing.
+3. Do not delay keypad scanning, door-sensor monitoring, lockout timing, or intrusion alarms while sending SMS messages.
+4. Avoid repeatedly sending duplicate alerts for the same event.
+5. Add appropriate rate limiting.
+6. Handle modem initialization failure.
+7. Handle missing SIM, poor signal, network registration failure, and SMS delivery errors where detectable.
+8. Provide a way to determine whether an SMS submission was accepted by the modem.
+9. Do not claim that a message was delivered unless delivery confirmation is actually available.
+10. Keep phone numbers configurable rather than embedding personal numbers throughout the code.
+11. Do not expose SIM PINs, credentials, or personal phone numbers in logs or source-control files.
+12. Do not block emergency alarm handling while the GSM modem is unavailable.
+
+Testing:
+- Test modem initialization.
+- Test network registration.
+- Test a single SMS.
+- Test failed-PIN alert generation.
+- Test intrusion alert generation.
+- Test duplicate suppression.
+- Test behavior when the modem is disconnected.
+- Test whether the main lock functions continue working during notification failures.
+
+If physical hardware is unavailable, provide a clearly labeled simulated test and explain which tests still require the actual modem.
+
+Do not modify unrelated application functionality.
+
+Complete Phase 8 and wait for my approval.
+
+============================================================
+PHASE 9 — ACTIVITY HISTORY AND NOTIFICATIONS
+============================================================
+
+Implement Phase 9 of my Smart Door Lock System.
+
+Objective:
+Build a real-time security event history using Firebase.
+
+Display events such as:
+- Incorrect PIN attempts.
+- Authentication lockouts.
+- Door opened while locked.
+- Door left open.
+- Successful and rejected remote commands.
+- Device disconnections and reconnections.
+- GSM alert attempts and outcomes, where available.
+
+Requirements:
+1. Create a reusable event model.
+2. Create a repository for retrieving authorized device events.
+3. Display events newest first.
+4. Show timestamps in the user's local timezone.
+5. Distinguish warnings, errors, and normal events visually.
+6. Add loading, empty, and error states.
+7. Support pagination or bounded queries instead of downloading unlimited history.
+8. Restrict events to devices the user is authorized to access.
+9. Avoid exposing PINs, passwords, tokens, or other sensitive information.
+10. Avoid recording the actual PIN entered by a user.
+11. Make it clear when an SMS was attempted versus confirmed delivered.
+12. Ensure that missing or delayed data is handled gracefully.
+
+If push notifications are added, use a suitable notification service and request any required permissions.
+
+Do not assume Firebase Realtime Database automatically provides Android push notifications.
+
+Test the event history using real Firebase records where available.
+
+Complete Phase 9 and wait for my approval.
+
+============================================================
+PHASE 10 — END-TO-END TESTING AND SECURITY REVIEW
+============================================================
+
+Perform a complete end-to-end review of my Smart Door Lock System.
+
+Inspect:
+- Flutter mobile application.
+- Firebase Authentication.
+- Firebase Realtime Database.
+- Database security rules.
+- ESP32 firmware.
+- Existing keypad and PIN authentication.
+- Servo lock mechanism.
+- Door sensor.
+- OLED, buzzer, and LEDs.
+- GSM modem and SMS alerts, if configured.
+
+Test the following scenarios.
+
+LOCAL OPERATION
+- Correct PIN.
+- Incorrect PIN.
+- Three consecutive incorrect attempts.
+- Lockout expiration.
+- Manual exit button.
+- Door opens while locked.
+- Door closes after being unlocked.
+- Automatic relocking.
+- Sensor state changes.
+
+MOBILE APP
+- Login and logout.
+- Unauthorized device access.
+- Live status updates.
+- Lock command.
+- Unlock command.
+- Pending and failed commands.
+- Network loss.
+- Session expiration.
+
+GSM
+- Successful modem initialization.
+- Successful SMS submission.
+- Missing modem.
+- Missing network coverage.
+- Duplicate-alert prevention.
+- Notification failures without interruption of the lock's security logic.
+
+INTEGRATION
+- ESP32 disconnected from Wi-Fi.
+- ESP32 reconnecting after an outage.
+- Firebase unavailable.
+- App closed while a command is being processed.
+- Duplicate or stale commands.
+- Delayed status updates.
+- Device restart during an operation.
+
+SECURITY REVIEW
+- Check database access rules.
+- Check device authorization.
+- Check whether clients can forge physical status.
+- Check replay and duplicate-command handling.
+- Check sensitive information in logs.
+- Check that cloud and GSM failures do not disable local security.
+- Check that the application never reports an unverified operation as successful.
+
+DELIVERABLES
+1. A list of tests and their results.
+2. Bugs discovered.
+3. Fixes applied.
+4. Tests requiring physical hardware.
+5. Remaining security limitations.
+6. Instructions for building and running the app.
+7. Instructions for configuring the ESP32.
+8. Instructions for configuring Firebase.
+9. Instructions for configuring the GSM modem.
+10. A final demonstration checklist.
+
+Do not claim a test passed unless it was actually executed.
+Do not remove existing functionality to make a test pass.
+Fix issues incrementally and rerun the relevant tests.
+
+Finish with a concise final project status report.
+
+============================================================
+PHASE 11 — FINAL UI POLISH AND DEMONSTRATION PREPARATION
+============================================================
+
+Prepare the completed Smart Door Lock System mobile application for its final project demonstration.
+
+Do not redesign or rewrite the entire application. First inspect the working implementation and identify the most valuable remaining improvements.
+
+Tasks:
+1. Improve spacing, typography, icons, and visual consistency.
+2. Verify layouts on different Android screen sizes.
+3. Improve loading indicators and error messages.
+4. Ensure the dashboard clearly displays confirmed device state.
+5. Make offline and stale-status conditions easy to understand.
+6. Make command success, rejection, and failure states visually distinct.
+7. Improve the activity history and settings screens.
+8. Remove unused code, debugging artifacts, and development-only mock data from production paths.
+9. Verify that no credentials or private configuration files are accidentally included in source control or release artifacts.
+10. Confirm that the application builds successfully.
+11. Document how to configure and run the complete system.
+12. Prepare a demonstration sequence showing:
+   - User login.
+   - Current lock and door status.
+   - Physical keypad operation.
+   - Remote lock and unlock.
+   - Incorrect PIN attempts.
+   - GSM SMS security alerts.
+   - Security event history.
+   - Behavior when internet connectivity is lost.
+
+Create a final checklist of anything that still requires manual configuration or physical testing.
+
+Do not introduce new features that could destabilize the working system.
+
+Complete the final review and report the actual build and test results.
+
+============================================================
+RECOMMENDED IMPLEMENTATION ORDER
+============================================================
+
+Phase 0: Existing-project analysis
+Phase 1: Flutter setup
+Phase 2: UI/UX
+Phase 3: Firebase Authentication
+Phase 4: Firebase data structure and security rules
+Phase 5: Live device status in the app
+Phase 6: ESP32-Firebase integration
+Phase 7: Secure remote lock/unlock
+Phase 8: GSM SMS alerts
+Phase 9: Activity history and notifications
+Phase 10: End-to-end testing and security review
+Phase 11: Final polish and demonstration preparation
+
+FINAL REMINDERS
+- Start with Phase 0 and wait for its report before proceeding.
+- Give Antigravity only one phase prompt at a time.
+- Review all code changes before accepting them.
+- Keep backups or use version control.
+- Preserve local keypad access and existing safety logic.
+- Confirm the exact GSM modem model before wiring or coding for it.
+- Test on actual hardware before claiming the complete system works.
+- Keep mock data clearly separated from production functionality.
+- Do not treat Firebase command submission as proof that the physical lock moved.
