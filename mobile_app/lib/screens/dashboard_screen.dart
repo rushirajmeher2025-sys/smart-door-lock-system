@@ -5,16 +5,16 @@ import '../models/security_event.dart';
 import '../repositories/mock_lock_repository.dart';
 import '../theme/app_colors.dart';
 import '../utils/constants.dart';
-import '../widgets/confirmation_dialog.dart';
-import '../widgets/lock_status_card.dart';
+import '../utils/time_format.dart';
+import '../widgets/bolt_dial.dart';
+import '../widgets/event_tile.dart';
+import '../widgets/hold_button.dart';
+import '../widgets/screen_header.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback? onNavigateToHistory;
 
-  const DashboardScreen({
-    super.key,
-    this.onNavigateToHistory,
-  });
+  const DashboardScreen({super.key, this.onNavigateToHistory});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -32,11 +32,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _lockState = _repository.currentState;
     _recentEvents = _repository.currentEvents.take(3).toList();
-
     _stateSub = _repository.stateStream.listen((state) {
       if (mounted) setState(() => _lockState = state);
     });
-
     _eventsSub = _repository.eventsStream.listen((events) {
       if (mounted) setState(() => _recentEvents = events.take(3).toList());
     });
@@ -49,323 +47,304 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
-  Future<void> _handleLockAction() async {
-    if (_lockState.isActionPending) return;
-
-    // Safety confirmation dialog
-    final confirmed = await LockConfirmationDialog.show(
-      context,
-      isLockingAction: true,
-      isDoorClosed: _lockState.doorClosed,
+  Future<void> _run(bool lock) async {
+    final ok = lock ? await _repository.sendLockCommand() : await _repository.sendUnlockCommand();
+    if (!mounted || ok) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Close the door before locking.')),
     );
-
-    if (confirmed != true) return;
-
-    final success = await _repository.sendLockCommand();
-    if (!mounted) return;
-
-    if (!success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Lock failed: Door must be closed first!'),
-          backgroundColor: AppColors.alarm,
-        ),
-      );
-    }
   }
 
-  Future<void> _handleUnlockAction() async {
-    if (_lockState.isActionPending) return;
-
-    // Safety confirmation dialog
-    final confirmed = await LockConfirmationDialog.show(
-      context,
-      isLockingAction: false,
-      isDoorClosed: _lockState.doorClosed,
+  void _openSimulation() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => StreamBuilder<DoorLockState>(
+        stream: _repository.stateStream,
+        initialData: _repository.currentState,
+        builder: (ctx, snap) {
+          final s = snap.data!;
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Simulation',
+                    style: TextStyle(color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Test how the app reacts without the ESP32.',
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                  ),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Door is open'),
+                    value: !s.doorClosed,
+                    onChanged: (_) => _repository.toggleDoorSensor(),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Lock is offline'),
+                    value: !s.isOnline,
+                    onChanged: (_) => _repository.toggleConnection(),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
-
-    if (confirmed != true) return;
-
-    await _repository.sendUnlockCommand();
   }
 
   @override
   Widget build(BuildContext context) {
+    final s = _lockState;
+    final offline = !s.isOnline;
+    final color = s.isLocked
+        ? AppColors.secure
+        : s.isUnlocked
+            ? AppColors.open
+            : AppColors.warning;
+    final title = s.isActionPending
+        ? 'Sending…'
+        : s.isLocked
+            ? 'Locked'
+            : s.isUnlocked
+                ? 'Unlocked'
+                : 'Unknown';
+    final subtitle = s.isActionPending
+        ? (s.pendingActionMessage ?? 'Waiting for the lock to confirm')
+        : offline
+            ? 'Offline. Showing the last known state.'
+            : 'Updated ${agoLong(s.lastUpdated)}';
+
+    final wantsLock = !s.isLocked;
+    final blockedByDoor = wantsLock && !s.doorClosed;
+    final canAct = !offline && !s.isActionPending && !blockedByDoor;
+    final String actionLabel;
+    if (offline) {
+      actionLabel = 'Lock is offline';
+    } else if (s.isActionPending) {
+      actionLabel = 'Waiting for the lock';
+    } else if (blockedByDoor) {
+      actionLabel = 'Close the door to lock';
+    } else {
+      actionLabel = wantsLock ? 'Hold to lock' : 'Hold to unlock';
+    }
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Security Dashboard'),
-        actions: [
-          // Simulated connection toggle icon
-          IconButton(
-            tooltip: _lockState.isOnline ? 'Simulate Disconnect' : 'Simulate Connect',
-            icon: Icon(
-              _lockState.isOnline ? Icons.wifi_rounded : Icons.wifi_off_rounded,
-              color: _lockState.isOnline ? AppColors.unlocked : AppColors.alarm,
-            ),
-            onPressed: () {
-              _repository.toggleConnection();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(_lockState.isOnline ? 'ESP32 connected' : 'ESP32 disconnected (Offline simulation)'),
-                  duration: const Duration(seconds: 1),
-                ),
-              );
-            },
-          ),
-          // Simulated Door Sensor toggle icon
-          IconButton(
-            tooltip: _lockState.doorClosed ? 'Simulate Door Opened' : 'Simulate Door Closed',
-            icon: Icon(
-              _lockState.doorClosed ? Icons.door_front_door_rounded : Icons.meeting_room_outlined,
-              color: _lockState.doorClosed ? AppColors.primaryLight : AppColors.warning,
-            ),
-            onPressed: () {
-              _repository.toggleDoorSensor();
-            },
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          await Future.delayed(const Duration(milliseconds: 600));
-        },
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: () => Future.delayed(const Duration(milliseconds: 600)),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
             children: [
-              // Main Lock Status Card
-              LockStatusCard(lockState: _lockState),
+              ScreenHeader(
+                title: 'Front door',
+                subtitle: AppConstants.appName,
+                trailing: IconButton(
+                  tooltip: 'Simulation',
+                  icon: const Icon(Icons.tune_rounded, color: AppColors.textSecondary),
+                  onPressed: _openSimulation,
+                ),
+              ),
+              if (s.burglarAlarmActive) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.alarm.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.alarm.withValues(alpha: 0.7)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.crisis_alert_rounded, color: AppColors.alarm),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Alarm is sounding',
+                              style: TextStyle(
+                                color: AppColors.alarm,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'The door was opened while locked.',
+                              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
-
-              // Action Controls (Large Dual Buttons)
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: (_lockState.isActionPending || !_lockState.isOnline)
-                          ? null
-                          : _handleUnlockAction,
-                      icon: const Icon(Icons.lock_open_rounded, size: 22),
-                      label: const Text('UNLOCK'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.unlocked,
-                        foregroundColor: Colors.black87,
-                        minimumSize: const Size(double.infinity, 54),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      ),
-                    ),
+              Center(
+                child: BoltDial(
+                  locked: s.isLocked,
+                  pending: s.isActionPending,
+                  dim: offline,
+                  color: color,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Center(
+                child: AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 400),
+                  style: TextStyle(
+                    color: offline ? AppColors.textSecondary : color,
+                    fontSize: 38,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -1,
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: (_lockState.isActionPending || !_lockState.isOnline)
-                          ? null
-                          : _handleLockAction,
-                      icon: const Icon(Icons.lock_rounded, size: 22),
-                      label: const Text('LOCK'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.locked,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(double.infinity, 54),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      ),
-                    ),
-                  ),
-                ],
+                  child: Text(title),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
               ),
               const SizedBox(height: 28),
-
-              // Hardware Quick Telemetry Grid
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTelemetryTile(
-                      title: 'Door Status',
-                      value: _lockState.doorClosed ? 'Closed' : 'OPEN / AJAR',
-                      icon: Icons.sensor_door_outlined,
-                      color: _lockState.doorClosed ? AppColors.primaryLight : AppColors.warning,
-                      actionLabel: 'Toggle',
-                      onAction: () => _repository.toggleDoorSensor(),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildTelemetryTile(
-                      title: 'Connection',
-                      value: _lockState.isOnline ? 'Online (WiFi)' : 'Offline',
-                      icon: Icons.router_outlined,
-                      color: _lockState.isOnline ? AppColors.unlocked : AppColors.alarm,
-                      actionLabel: 'Toggle',
-                      onAction: () => _repository.toggleConnection(),
-                    ),
-                  ),
-                ],
+              HoldButton(
+                label: actionLabel,
+                icon: wantsLock ? Icons.lock_rounded : Icons.lock_open_rounded,
+                color: wantsLock ? AppColors.secure : AppColors.open,
+                enabled: canAct,
+                duration: Duration(milliseconds: wantsLock ? 450 : 800),
+                onConfirmed: () => _run(wantsLock),
               ),
-              const SizedBox(height: 28),
-
-              // Recent Events Section Header
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: IntrinsicHeight(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _Fact(
+                          label: 'Door',
+                          value: s.doorClosed ? 'Closed' : 'Open',
+                          dot: s.doorClosed ? AppColors.secure : AppColors.warning,
+                        ),
+                      ),
+                      const VerticalDivider(width: 1),
+                      Expanded(
+                        child: _Fact(
+                          label: 'Connection',
+                          value: s.isOnline ? 'Online' : 'Offline',
+                          dot: s.isOnline ? AppColors.secure : AppColors.alarm,
+                        ),
+                      ),
+                      const VerticalDivider(width: 1),
+                      Expanded(child: _Fact(label: 'Last used', value: s.lastMethod)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Recent Activity',
-                    style: TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.3,
+                  const Expanded(
+                    child: Text(
+                      'Recent activity',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                   TextButton(
                     onPressed: widget.onNavigateToHistory ??
                         () => Navigator.of(context).pushNamed(AppConstants.routeHistory),
-                    child: const Text(
-                      'View All',
-                      style: TextStyle(color: AppColors.primaryLight, fontSize: 13, fontWeight: FontWeight.w600),
-                    ),
+                    child: const Text('See all'),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-
-              // Recent Events List Preview
-              if (_recentEvents.isEmpty) ...[
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: AppColors.card,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border),
+              const SizedBox(height: 12),
+              if (_recentEvents.isEmpty)
+                const Text(
+                  'No activity yet. Lock and unlock events will show up here.',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                )
+              else
+                for (var i = 0; i < _recentEvents.length; i++)
+                  EventTile(
+                    event: _recentEvents[i],
+                    trailing: agoShort(_recentEvents[i].timestamp),
+                    showLine: i < _recentEvents.length - 1,
                   ),
-                  child: const Center(
-                    child: Text(
-                      'No recent security events recorded.',
-                      style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                    ),
-                  ),
-                ),
-              ] else ...[
-                ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _recentEvents.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 10),
-                  itemBuilder: (context, index) {
-                    final event = _recentEvents[index];
-                    return _buildEventItem(event);
-                  },
-                ),
-              ],
             ],
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildTelemetryTile({
-    required String title,
-    required String value,
-    required IconData icon,
-    required Color color,
-    required String actionLabel,
-    required VoidCallback onAction,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
+class _Fact extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? dot;
+
+  const _Fact({required this.label, required this.value, this.dot});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(label, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+          const SizedBox(height: 6),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(icon, color: color, size: 20),
-              InkWell(
-                onTap: onAction,
-                borderRadius: BorderRadius.circular(6),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  child: Text(
-                    actionLabel,
-                    style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
-                  ),
+              if (dot != null) ...[
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(title, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.bold),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEventItem(SecurityEvent event) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: event.isWarningOrAlarm ? event.color.withValues(alpha: 0.4) : AppColors.border,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: event.color.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(event.icon, color: event.color, size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  event.title,
+                const SizedBox(width: 7),
+              ],
+              Expanded(
+                child: Text(
+                  value,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: AppColors.textPrimary,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
+                    height: 1.2,
                   ),
                 ),
-                Text(
-                  event.method,
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            _formatEventTime(event.timestamp),
-            style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+              ),
+            ],
           ),
         ],
       ),
     );
-  }
-
-  String _formatEventTime(DateTime time) {
-    final diff = DateTime.now().difference(time);
-    if (diff.inSeconds < 60) return 'now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
-    if (diff.inHours < 24) return '${diff.inHours}h';
-    return '${diff.inDays}d';
   }
 }

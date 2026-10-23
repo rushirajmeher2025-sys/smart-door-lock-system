@@ -13,48 +13,33 @@ class MainNavScreen extends StatefulWidget {
 class _MainNavScreenState extends State<MainNavScreen> {
   int _currentIndex = 0;
 
-  void _navigateToTab(int index) {
-    setState(() {
-      _currentIndex = index;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final screens = [
-      DashboardScreen(
-        onNavigateToHistory: () => _navigateToTab(1),
-      ),
+      DashboardScreen(onNavigateToHistory: () => setState(() => _currentIndex = 1)),
       const HistoryScreen(),
       const SettingsScreen(),
     ];
 
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: screens,
-      ),
+      body: IndexedStack(index: _currentIndex, children: screens),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
+        onDestinationSelected: (i) => setState(() => _currentIndex = i),
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.shield_outlined),
-            selectedIcon: Icon(Icons.shield_rounded),
-            label: 'Dashboard',
+            icon: Icon(Icons.lock_outline_rounded),
+            selectedIcon: Icon(Icons.lock_rounded),
+            label: 'Door',
           ),
           NavigationDestination(
-            icon: Icon(Icons.history_outlined),
+            icon: Icon(Icons.history_rounded),
             selectedIcon: Icon(Icons.history_rounded),
             label: 'Activity',
           ),
           NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings_rounded),
+            icon: Icon(Icons.tune_outlined),
+            selectedIcon: Icon(Icons.tune_rounded),
             label: 'Settings',
           ),
         ],

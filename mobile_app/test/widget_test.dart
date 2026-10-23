@@ -13,10 +13,10 @@ void main() {
       ),
     );
 
-    expect(find.text('ESA Smart Lock'), findsOneWidget);
-    expect(find.text('Sign In to Lock'), findsOneWidget);
-    expect(find.text('Email Address'), findsOneWidget);
+    expect(find.text('Welcome back'), findsOneWidget);
+    expect(find.text('Email'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
+    expect(find.text('Sign in'), findsWidgets);
   });
 
   testWidgets('DashboardScreen renders lock status and controls', (WidgetTester tester) async {
@@ -27,9 +27,8 @@ void main() {
       ),
     );
 
-    expect(find.text('Security Dashboard'), findsOneWidget);
-    expect(find.text('LOCKED'), findsOneWidget);
-    expect(find.text('LOCK'), findsOneWidget);
-    expect(find.text('UNLOCK'), findsOneWidget);
+    expect(find.text('Front door'), findsOneWidget);
+    expect(find.text('Locked'), findsOneWidget);
+    expect(find.text('Hold to unlock'), findsOneWidget);
   });
 }

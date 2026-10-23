@@ -41,7 +41,7 @@ class SecurityEvent {
       case EventSeverity.warning:
         return AppColors.warning;
       case EventSeverity.normal:
-        return AppColors.unlocked;
+        return AppColors.textSecondary;
     }
   }
 

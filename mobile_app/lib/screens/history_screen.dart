@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import '../models/security_event.dart';
 import '../repositories/mock_lock_repository.dart';
 import '../theme/app_colors.dart';
+import '../utils/time_format.dart';
 import '../widgets/app_error_view.dart';
 import '../widgets/app_loading_indicator.dart';
+import '../widgets/event_tile.dart';
+import '../widgets/screen_header.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -18,7 +21,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   late List<SecurityEvent> _allEvents;
   StreamSubscription<List<SecurityEvent>>? _eventsSub;
 
-  int _selectedFilterIndex = 0; // 0: All, 1: Warnings/Alarms, 2: Normal
+  int _filter = 0;
   bool _simulateLoading = false;
   bool _simulateError = false;
 
@@ -37,175 +40,135 @@ class _HistoryScreenState extends State<HistoryScreen> {
     super.dispose();
   }
 
-  List<SecurityEvent> get _filteredEvents {
-    if (_selectedFilterIndex == 1) {
-      return _allEvents.where((e) => e.isWarningOrAlarm).toList();
-    } else if (_selectedFilterIndex == 2) {
-      return _allEvents.where((e) => !e.isWarningOrAlarm).toList();
-    }
+  int get _alertCount => _allEvents.where((e) => e.isWarningOrAlarm).length;
+
+  List<SecurityEvent> get _filtered {
+    if (_filter == 1) return _allEvents.where((e) => e.isWarningOrAlarm).toList();
+    if (_filter == 2) return _allEvents.where((e) => !e.isWarningOrAlarm).toList();
     return _allEvents;
   }
 
-  String _formatDetailDate(DateTime time) {
-    final diff = DateTime.now().difference(time);
-    if (diff.inSeconds < 60) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} minutes ago';
-    if (diff.inHours < 24) return '${diff.inHours} hours ago';
-    return '${time.day}/${time.month}/${time.year} at ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  List<Object> get _rows {
+    final out = <Object>[];
+    String? last;
+    for (final e in _filtered) {
+      final d = dayLabel(e.timestamp);
+      if (d != last) {
+        out.add(d);
+        last = d;
+      }
+      out.add(e);
+    }
+    return out;
+  }
+
+  void _simulate(String val) {
+    setState(() {
+      if (val == 'loading') {
+        _simulateLoading = true;
+        _simulateError = false;
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) setState(() => _simulateLoading = false);
+        });
+      } else if (val == 'error') {
+        _simulateError = !_simulateError;
+        _simulateLoading = false;
+      } else {
+        _simulateError = false;
+        _simulateLoading = false;
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Activity History'),
-        actions: [
-          // State simulation menu to test Loading / Error / Normal states
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.tune_rounded),
-            tooltip: 'Simulate UI States',
-            onSelected: (val) {
-              setState(() {
-                if (val == 'loading') {
-                  _simulateLoading = true;
-                  _simulateError = false;
-                  Future.delayed(const Duration(seconds: 2), () {
-                    if (mounted) setState(() => _simulateLoading = false);
-                  });
-                } else if (val == 'error') {
-                  _simulateError = !_simulateError;
-                  _simulateLoading = false;
-                } else {
-                  _simulateError = false;
-                  _simulateLoading = false;
-                }
-              });
-            },
-            itemBuilder: (ctx) => [
-              const PopupMenuItem(
-                value: 'loading',
-                child: Row(
-                  children: [
-                    Icon(Icons.hourglass_top_rounded, size: 18),
-                    SizedBox(width: 8),
-                    Text('Simulate Loading State'),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
+              child: ScreenHeader(
+                title: 'Activity',
+                subtitle: '${_allEvents.length} events recorded',
+                trailing: PopupMenuButton<String>(
+                  icon: const Icon(Icons.tune_rounded, color: AppColors.textSecondary),
+                  tooltip: 'Simulate states',
+                  onSelected: _simulate,
+                  itemBuilder: (ctx) => [
+                    const PopupMenuItem(value: 'loading', child: Text('Show loading')),
+                    PopupMenuItem(
+                      value: 'error',
+                      child: Text(_simulateError ? 'Clear error' : 'Show error'),
+                    ),
+                    const PopupMenuItem(value: 'reset', child: Text('Reset')),
                   ],
                 ),
               ),
-              PopupMenuItem(
-                value: 'error',
-                child: Row(
-                  children: [
-                    Icon(Icons.error_outline_rounded, size: 18, color: AppColors.alarm),
-                    const SizedBox(width: 8),
-                    Text(_simulateError ? 'Clear Error State' : 'Simulate Error State'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'reset',
-                child: Row(
-                  children: [
-                    Icon(Icons.restart_alt_rounded, size: 18),
-                    SizedBox(width: 8),
-                    Text('Reset to Normal'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Filter Chips Row
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: AppColors.surface,
-            child: Row(
-              children: [
-                _buildFilterChip(0, 'All (${_allEvents.length})'),
-                const SizedBox(width: 8),
-                _buildFilterChip(1, 'Warnings & Alarms', isWarning: true),
-                const SizedBox(width: 8),
-                _buildFilterChip(2, 'Normal Access'),
-              ],
             ),
-          ),
-
-          // Main Content Area with State Handling
-          Expanded(
-            child: _buildBodyContent(),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<int>(
+                  showSelectedIcon: false,
+                  segments: [
+                    const ButtonSegment(value: 0, label: Text('All')),
+                    ButtonSegment(
+                      value: 1,
+                      label: Text(_alertCount > 0 ? 'Alerts ($_alertCount)' : 'Alerts'),
+                    ),
+                    const ButtonSegment(value: 2, label: Text('Normal')),
+                  ],
+                  selected: {_filter},
+                  onSelectionChanged: (s) => setState(() => _filter = s.first),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Expanded(child: _body()),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildFilterChip(int index, String label, {bool isWarning = false}) {
-    final isSelected = _selectedFilterIndex == index;
-    return ChoiceChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (selected) {
-        if (selected) setState(() => _selectedFilterIndex = index);
-      },
-      selectedColor: isWarning ? AppColors.alarm.withValues(alpha: 0.25) : AppColors.primary,
-      backgroundColor: AppColors.surfaceLight,
-      labelStyle: TextStyle(
-        color: isSelected ? Colors.white : AppColors.textSecondary,
-        fontSize: 12,
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-      ),
-      side: BorderSide(
-        color: isSelected
-            ? (isWarning ? AppColors.alarm : AppColors.primaryLight)
-            : AppColors.border,
-      ),
-    );
-  }
-
-  Widget _buildBodyContent() {
+  Widget _body() {
     if (_simulateLoading) {
-      return const AppLoadingIndicator(message: 'Retrieving security event log...');
+      return const AppLoadingIndicator(message: 'Loading activity…');
     }
 
     if (_simulateError) {
       return AppErrorView(
-        title: 'Failed to Load Activity Log',
-        message: 'Could not connect to Firebase Realtime Database. Check network connection.',
-        onRetry: () {
-          setState(() {
-            _simulateError = false;
-          });
-        },
+        title: 'Couldn’t load activity',
+        message: 'The app can’t reach the database. Check your connection and try again.',
+        onRetry: () => setState(() => _simulateError = false),
       );
     }
 
-    final events = _filteredEvents;
-
-    if (events.isEmpty) {
-      return Center(
+    final rows = _rows;
+    if (rows.isEmpty) {
+      return const Center(
         child: Padding(
-          padding: const EdgeInsets.all(32.0),
+          padding: EdgeInsets.all(32),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.history_toggle_off_rounded, size: 54, color: AppColors.textMuted),
-              const SizedBox(height: 16),
-              const Text(
-                'No Events Found',
+              Icon(Icons.history_toggle_off_rounded, size: 48, color: AppColors.textMuted),
+              SizedBox(height: 16),
+              Text(
+                'Nothing here',
                 style: TextStyle(
                   color: AppColors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 6),
-              const Text(
-                'There are no security events matching this filter category.',
+              SizedBox(height: 6),
+              Text(
+                'No events match this filter. Switch to All to see every event.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.4),
               ),
             ],
           ),
@@ -213,120 +176,33 @@ class _HistoryScreenState extends State<HistoryScreen> {
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: events.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 10),
-      itemBuilder: (context, index) {
-        final event = events[index];
-        return _buildDetailedEventCard(event);
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+      itemCount: rows.length,
+      itemBuilder: (context, i) {
+        final row = rows[i];
+        if (row is String) {
+          return Padding(
+            padding: EdgeInsets.only(top: i == 0 ? 8 : 14, bottom: 14),
+            child: Text(
+              row,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          );
+        }
+        final event = row as SecurityEvent;
+        final isLast = i == rows.length - 1 || rows[i + 1] is String;
+        return EventTile(
+          event: event,
+          trailing: clock(event.timestamp),
+          showLine: !isLast,
+          detailed: true,
+        );
       },
-    );
-  }
-
-  Widget _buildDetailedEventCard(SecurityEvent event) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: event.isWarningOrAlarm
-              ? event.color.withValues(alpha: 0.5)
-              : AppColors.border,
-          width: event.isWarningOrAlarm ? 1.5 : 1,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: event.color.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(event.icon, color: event.color, size: 22),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          event.title,
-                          style: TextStyle(
-                            color: event.isWarningOrAlarm ? event.color : AppColors.textPrimary,
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      if (event.isWarningOrAlarm)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: event.color.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            event.severity == EventSeverity.alarm ? 'ALERT' : 'WARNING',
-                            style: TextStyle(
-                              color: event.color,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    event.description,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
-                      height: 1.3,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.subdirectory_arrow_right_rounded, size: 14, color: AppColors.textMuted),
-                          const SizedBox(width: 4),
-                          Text(
-                            event.method,
-                            style: const TextStyle(
-                              color: AppColors.accent,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Text(
-                        _formatDetailDate(event.timestamp),
-                        style: const TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
