@@ -4,7 +4,7 @@
 #include <Arduino.h>
 
 // ============================================================
-//  ESA Smart Lock - Configuration (offline version)
+//  ESA Smart Lock - Configuration
 // ============================================================
 
 // -- OPTIONS -------------------------------------------------
@@ -87,6 +87,18 @@
 
 // -- DEFAULTS ------------------------------------------------
 #define DEFAULT_PIN          "1234"
+
+// -- CLOUD (Wi-Fi + Firebase, for the LocKify app) -----------
+// Wi-Fi and Firebase credentials go in secrets.h (see secrets.example.h).
+// The lock works exactly as before when offline or without secrets.h.
+#define CLOUD_ENABLED          true
+#define FIRMWARE_VERSION       "3.0"
+#define DEVICE_ID              "esp32_lock_01"  // must match deviceId in the app
+#define APP_CAN_CLEAR_ALARM    false    // true = the app can also stop the burglar alarm
+#define HEARTBEAT_INTERVAL_MS  10000    // status refresh so the app knows the lock is online
+#define COMMAND_POLL_MS        1000     // how often to check for app commands
+#define COMMAND_MAX_AGE_MS     15000    // app commands older than this are rejected
+#define CLOUD_TASK_CORE        0        // network runs on core 0, the lock logic on core 1
 
 // -- PIN-change state machine --------------------------------
 enum PinChangeMode {

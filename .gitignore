@@ -19,3 +19,9 @@ $RECYCLE.BIN/
 
 # Local configs and secrets
 *.local
+
+# ESP32 Wi-Fi / Firebase credentials (copy secrets.example.h)
+firmware/smart_lock/secrets.h
+
+# Firebase emulator logs
+*-debug.log

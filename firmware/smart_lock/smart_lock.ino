@@ -1,5 +1,5 @@
 // ============================================================
-//  ESA SMART DOOR LOCK  v2.9  (Offline, SH1106 / U8g2)
+//  ESA SMART DOOR LOCK  v3.0  (SH1106 / U8g2 + LocKify cloud)
 //  ESP32 + 1.3" SH1106 OLED + Keypad + Servo
 //
 //  Keypad Controls
@@ -14,6 +14,10 @@
 //
 //  Burglar alarm: if the door opens while the lock is LOCKED,
 //  a siren sounds. Only the correct PIN stops it.
+//
+//  Cloud (v3.0): reports status/events to Firebase and accepts
+//  lock/unlock from the LocKify app (see cloud.cpp). Everything
+//  above keeps working when Wi-Fi or the internet is down.
 // ============================================================
 
 #include <Wire.h>
@@ -23,6 +27,7 @@
 #include <Preferences.h>
 
 #include "config.h"
+#include "cloud.h"
 
 // ======================== OBJECTS ========================
 
@@ -48,6 +53,7 @@ Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 bool isLocked            = true;
 bool doorClosed          = true;
 bool doorWasOpened       = false;
+String lastMethod        = "keypad";   // what last locked/unlocked the door (shown in the app)
 
 String correctPIN = DEFAULT_PIN;
 String enteredPIN = "";
@@ -325,6 +331,7 @@ void logEvent(String event, String method) {
                  + String(isLocked ? "yes" : "no") + "  door="
                  + String(doorClosed ? "closed" : "open") + "  uptime="
                  + String(millis() / 1000) + "s");
+  if (event != "status") cloudLogEvent(event.c_str(), method.c_str());
 }
 
 // ===================== LEDs =====================
@@ -365,7 +372,7 @@ void triggerBurglarAlarm() {
   logEvent("burglar_alarm", "sensor");
 }
 
-void clearBurglarAlarm() {
+void clearBurglarAlarm(String method) {
   if (!burglarAlarmActive) return;
 
   burglarAlarmActive = false;
@@ -375,6 +382,7 @@ void clearBurglarAlarm() {
   }
   updateLEDs();
   Serial.println("[ALARM] Alarm cleared");
+  logEvent("alarm_cleared", method);
 }
 
 void handleBurglarAlarm() {
@@ -401,9 +409,10 @@ void handleBurglarAlarm() {
 // ===================== LOCK CONTROL =====================
 
 void unlockDoor(String method) {
-  clearBurglarAlarm();          // a valid unlock disarms the alarm
+  clearBurglarAlarm(method);    // a valid unlock disarms the alarm
   moveServo(UNLOCKED_POSITION);
   isLocked             = false;
+  lastMethod           = method;
   doorWasOpened        = false;
   autoLockTimerRunning = false;
   doorWarningActive    = false;
@@ -415,18 +424,20 @@ void unlockDoor(String method) {
   logEvent("unlock", method);
 }
 
-void lockDoor(String method) {
-  if (burglarAlarmActive) return;   // nothing to do while the alarm is active
+// Returns false when the lock refused (alarm active or door open)
+bool lockDoor(String method) {
+  if (burglarAlarmActive) return false;   // nothing to do while the alarm is active
 
   if (!doorClosed) {
     Serial.println("[LOCK] BLOCKED - door is open");
     showTimed("DOOR OPEN", "Close Door First", TIMED_MSG_DEFAULT);
     playError();
-    return;
+    return false;
   }
 
   moveServo(LOCKED_POSITION);
   isLocked             = true;
+  lastMethod           = method;
   lockedAt             = millis();   // alarm is armed after the grace period
   doorWasOpened        = false;
   autoLockTimerRunning = false;
@@ -436,6 +447,7 @@ void lockDoor(String method) {
   playLock();
   showStatus("LOCKED", "Enter PIN");
   logEvent("lock", method);
+  return true;
 }
 
 // ===================== PIN CHECKING =====================
@@ -683,6 +695,75 @@ void handleDoorWarning() {
   }
 }
 
+// ===================== CLOUD (LocKify app) =====================
+
+// Leave the PIN-change wizard so the screen matches the new lock state
+void cancelPinChange() {
+  if (pinState == PIN_NORMAL) return;
+  pinState   = PIN_NORMAL;
+  enteredPIN = "";
+  newPIN     = "";
+  confirmPIN = "";
+}
+
+// A remote command goes through the same safety rules as the keypad and buttons.
+void handleRemoteCommand(const CloudCommand& cmd) {
+  switch (cmd.action) {
+    case CLOUD_UNLOCK:
+      if (burglarAlarmActive && !APP_CAN_CLEAR_ALARM) {
+        // Only the PIN may stop an intrusion alarm (an unlock would silence it)
+        showTimed("ALARM ACTIVE", "Enter PIN to stop", TIMED_MSG_DEFAULT);
+        playError();
+        cloudCommandDone(cmd, false, "ALARM_PIN_REQUIRED");
+        return;
+      }
+      cancelPinChange();
+      unlockDoor("app");
+      cloudCommandDone(cmd, !isLocked, isLocked ? "UNLOCK_FAILED" : "");
+      break;
+
+    case CLOUD_LOCK: {
+      cancelPinChange();
+      bool ok = lockDoor("app");
+      const char* reason = "";
+      if (!ok) reason = burglarAlarmActive ? "ALARM_ACTIVE" : "BLOCKED_DOOR_OPEN";
+      if (!ok && burglarAlarmActive) {
+        showTimed("ALARM ACTIVE", "Enter PIN to stop", TIMED_MSG_DEFAULT);
+        playError();
+      }
+      cloudCommandDone(cmd, ok, reason);
+      break;
+    }
+
+    case CLOUD_CLEAR_ALARM:
+      if (!APP_CAN_CLEAR_ALARM) {
+        cloudCommandDone(cmd, false, "ALARM_PIN_REQUIRED");
+      } else {
+        clearBurglarAlarm("app");
+        restoreDefaultScreen();
+        cloudCommandDone(cmd, true, "");
+      }
+      break;
+
+    case CLOUD_PING:
+      cloudCommandDone(cmd, true, "");
+      break;
+  }
+}
+
+void handleCloud() {
+  CloudState s = {};
+  s.isLocked           = isLocked;
+  s.doorClosed         = doorClosed;
+  s.burglarAlarmActive = burglarAlarmActive;
+  s.isLockout          = lockout;
+  strlcpy(s.lastMethod, lastMethod.c_str(), sizeof(s.lastMethod));
+  cloudPublishState(s);
+
+  CloudCommand cmd;
+  if (cloudNextCommand(cmd)) handleRemoteCommand(cmd);
+}
+
 // ===================== KEYPAD HANDLER =====================
 
 void handleKeypress(char key) {
@@ -792,8 +873,8 @@ void setup() {
   }
 
   Serial.println("\n==============================");
-  Serial.println("   ESA SMART DOOR LOCK v2.9");
-  Serial.println("        (offline mode)");
+  Serial.println("   ESA SMART DOOR LOCK v" FIRMWARE_VERSION);
+  Serial.println("     (LocKify cloud ready)");
   Serial.print("   Buzzer: ");
   Serial.println(BUZZER_ENABLED ? "ON" : "OFF");
   Serial.print("   Burglar alarm: ");
@@ -824,6 +905,8 @@ void setup() {
   delay(800);
   restoreDefaultScreen();
 
+  cloudBegin();   // Wi-Fi + Firebase in the background; the lock is usable right away
+
   Serial.println("\nSystem ready. Default PIN: " DEFAULT_PIN);
   Serial.println("CONTROLS:");
   Serial.println("  0-9  PIN digits    #  Enter/Submit");
@@ -850,6 +933,8 @@ void loop() {
   handleAutoLock();
   handleDoorWarning();
   handleBurglarAlarm();
+
+  handleCloud();   // before the keypad skip below, so app commands work during lockout too
 
   // Keypad - skip during lockout or while a timed message is showing
   if (lockout || timedMsgActive) return;
