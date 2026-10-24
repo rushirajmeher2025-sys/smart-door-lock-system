@@ -3,7 +3,8 @@ const _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 String agoShort(DateTime t) {
   final d = DateTime.now().difference(t);
-  if (d.inSeconds < 60) return 'now';
+  if (d.inSeconds < 10) return 'now';
+  if (d.inSeconds < 60) return '${d.inSeconds}s';
   if (d.inMinutes < 60) return '${d.inMinutes}m';
   if (d.inHours < 24) return '${d.inHours}h';
   return '${d.inDays}d';
@@ -11,7 +12,8 @@ String agoShort(DateTime t) {
 
 String agoLong(DateTime t) {
   final d = DateTime.now().difference(t);
-  if (d.inSeconds < 60) return 'just now';
+  if (d.inSeconds < 10) return 'just now';
+  if (d.inSeconds < 60) return '${d.inSeconds} s ago';
   if (d.inMinutes < 60) return '${d.inMinutes} min ago';
   if (d.inHours < 24) return '${d.inHours} h ago';
   return '${d.inDays} d ago';

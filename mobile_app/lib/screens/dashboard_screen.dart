@@ -1,15 +1,21 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/lock_state.dart';
+import '../models/remote_command.dart';
 import '../models/security_event.dart';
+import '../repositories/lock_repository.dart';
 import '../repositories/mock_lock_repository.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
 import '../utils/constants.dart';
 import '../utils/time_format.dart';
-import '../widgets/bolt_dial.dart';
+import '../widgets/backdrop.dart';
+import '../widgets/brand_mark.dart';
 import '../widgets/event_tile.dart';
-import '../widgets/hold_button.dart';
-import '../widgets/screen_header.dart';
+import '../widgets/lock_orb.dart';
+import '../widgets/panel.dart';
+import '../widgets/swipe_to_confirm.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback? onNavigateToHistory;
@@ -21,22 +27,26 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final _repository = MockLockRepository.instance;
+  final LockRepository _repository = lockRepository();
   late DoorLockState _lockState;
   late List<SecurityEvent> _recentEvents;
   StreamSubscription<DoorLockState>? _stateSub;
   StreamSubscription<List<SecurityEvent>>? _eventsSub;
 
+  CommandOutcome? _outcome;
+  Timer? _outcomeTimer;
+  int _celebrate = 0;
+
   @override
   void initState() {
     super.initState();
     _lockState = _repository.currentState;
-    _recentEvents = _repository.currentEvents.take(3).toList();
+    _recentEvents = _repository.currentEvents.take(4).toList();
     _stateSub = _repository.stateStream.listen((state) {
       if (mounted) setState(() => _lockState = state);
     });
     _eventsSub = _repository.eventsStream.listen((events) {
-      if (mounted) setState(() => _recentEvents = events.take(3).toList());
+      if (mounted) setState(() => _recentEvents = events.take(4).toList());
     });
   }
 
@@ -44,24 +54,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void dispose() {
     _stateSub?.cancel();
     _eventsSub?.cancel();
+    _outcomeTimer?.cancel();
     super.dispose();
   }
 
   Future<void> _run(bool lock) async {
-    final ok = lock ? await _repository.sendLockCommand() : await _repository.sendUnlockCommand();
-    if (!mounted || ok) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Close the door before locking.')),
-    );
+    setState(() => _outcome = null);
+    final outcome = await _repository.sendCommand(lock ? RemoteAction.lock : RemoteAction.unlock);
+    if (!mounted) return;
+    outcome.ok ? HapticFeedback.heavyImpact() : HapticFeedback.vibrate();
+    setState(() {
+      _outcome = outcome;
+      if (outcome.ok) _celebrate++;
+    });
+    _outcomeTimer?.cancel();
+    _outcomeTimer = Timer(Duration(seconds: outcome.ok ? 4 : 9), () {
+      if (mounted) setState(() => _outcome = null);
+    });
   }
 
   void _openSimulation() {
+    final mock = MockLockRepository.instance;
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       builder: (ctx) => StreamBuilder<DoorLockState>(
-        stream: _repository.stateStream,
-        initialData: _repository.currentState,
+        stream: mock.stateStream,
+        initialData: mock.currentState,
         builder: (ctx, snap) {
           final s = snap.data!;
           return SafeArea(
@@ -71,27 +90,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Simulation',
-                    style: TextStyle(color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.w700),
-                  ),
+                  Text('SIMULATOR', style: AppTheme.label()),
+                  const SizedBox(height: 6),
+                  Text('Play the lock’s side', style: AppTheme.display(fontSize: 22, letterSpacing: -0.5)),
                   const SizedBox(height: 4),
                   const Text(
-                    'Test how the app reacts without the ESP32.',
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                    'Demo mode only. Trigger what the hardware would report.',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 13.5),
+                  ),
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Door open'),
+                    subtitle: const Text('Opening it while locked sets off the alarm'),
+                    value: !s.doorClosed,
+                    onChanged: (_) => mock.toggleDoorSensor(),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Lock offline'),
+                    subtitle: const Text('Wi-Fi or power lost'),
+                    value: !s.isOnline,
+                    onChanged: (_) => mock.toggleConnection(),
                   ),
                   const SizedBox(height: 8),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Door is open'),
-                    value: !s.doorClosed,
-                    onChanged: (_) => _repository.toggleDoorSensor(),
-                  ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Lock is offline'),
-                    value: !s.isOnline,
-                    onChanged: (_) => _repository.toggleConnection(),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+                    onPressed: mock.enterPinOnKeypad,
+                    icon: const Icon(Icons.dialpad_rounded, size: 18),
+                    label: const Text('Enter the right PIN on the keypad'),
                   ),
                 ],
               ),
@@ -105,195 +132,284 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final s = _lockState;
-    final offline = !s.isOnline;
-    final color = s.isLocked
-        ? AppColors.secure
-        : s.isUnlocked
-            ? AppColors.open
-            : AppColors.warning;
-    final title = s.isActionPending
-        ? 'Sending…'
-        : s.isLocked
-            ? 'Locked'
-            : s.isUnlocked
-                ? 'Unlocked'
-                : 'Unknown';
-    final subtitle = s.isActionPending
-        ? (s.pendingActionMessage ?? 'Waiting for the lock to confirm')
-        : offline
-            ? 'Offline. Showing the last known state.'
-            : 'Updated ${agoLong(s.lastUpdated)}';
+    final confirmed = s.isConfirmed;
+    final alarm = s.burglarAlarmActive && s.hasReport;
+
+    final Color color;
+    final String title;
+    if (!s.hasReport || s.syncIssue != null) {
+      color = AppColors.offline;
+      title = s.syncIssue != null ? 'No access' : 'Waiting';
+    } else if (alarm) {
+      color = AppColors.alarm;
+      title = 'Intruder';
+    } else if (!s.isOnline) {
+      color = AppColors.offline;
+      title = 'Offline';
+    } else if (s.isLocked) {
+      color = AppColors.secure;
+      title = 'Locked';
+    } else if (s.isUnlocked) {
+      color = AppColors.open;
+      title = 'Unlocked';
+    } else {
+      color = AppColors.offline;
+      title = 'Unknown';
+    }
+
+    final String subtitle;
+    if (s.isActionPending) {
+      subtitle = s.pendingActionMessage ?? 'Waiting for the lock…';
+    } else if (s.syncIssue != null) {
+      subtitle = s.syncIssue!;
+    } else if (!s.hasReport) {
+      subtitle = 'Power on the lock and connect it to Wi-Fi.';
+    } else if (alarm) {
+      subtitle = 'Door opened while locked. Enter the PIN on the keypad.';
+    } else if (!s.isOnline) {
+      final last = s.isLocked ? 'locked' : (s.isUnlocked ? 'unlocked' : 'unknown');
+      subtitle = 'Last report: $last, ${agoLong(s.lastUpdated)}';
+    } else {
+      subtitle = 'Confirmed by the lock · ${agoLong(s.lastUpdated)}';
+    }
 
     final wantsLock = !s.isLocked;
     final blockedByDoor = wantsLock && !s.doorClosed;
-    final canAct = !offline && !s.isActionPending && !blockedByDoor;
+    final canAct = confirmed && !s.isActionPending && !blockedByDoor && !alarm;
     final String actionLabel;
-    if (offline) {
+    if (!confirmed) {
       actionLabel = 'Lock is offline';
     } else if (s.isActionPending) {
-      actionLabel = 'Waiting for the lock';
+      actionLabel = 'Waiting for the lock…';
+    } else if (alarm) {
+      actionLabel = 'Use the keypad PIN to stop the alarm';
     } else if (blockedByDoor) {
       actionLabel = 'Close the door to lock';
     } else {
-      actionLabel = wantsLock ? 'Hold to lock' : 'Hold to unlock';
+      actionLabel = wantsLock ? 'Slide to lock' : 'Slide to unlock';
     }
 
+    final live = confirmed && !_repository.isSimulation;
+
     return Scaffold(
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () => Future.delayed(const Duration(milliseconds: 600)),
+      backgroundColor: Colors.transparent,
+      body: Backdrop(
+        tint: color,
+        child: SafeArea(
+          bottom: false,
           child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 120),
             children: [
-              ScreenHeader(
-                title: 'Front door',
-                subtitle: AppConstants.appName,
-                trailing: IconButton(
-                  tooltip: 'Simulation',
-                  icon: const Icon(Icons.tune_rounded, color: AppColors.textSecondary),
-                  onPressed: _openSimulation,
+              Row(
+                children: [
+                  const BrandMark(size: 28),
+                  const Spacer(),
+                  if (_repository.isSimulation)
+                    const Pill(label: 'DEMO', color: AppColors.textSecondary, icon: Icons.science_outlined)
+                  else
+                    Pill(
+                      label: live ? 'LIVE' : 'OFFLINE',
+                      color: live ? AppColors.brand : AppColors.offline,
+                      pulse: live,
+                    ),
+                  if (_repository.isSimulation) ...[
+                    const SizedBox(width: 4),
+                    IconButton(
+                      tooltip: 'Simulator',
+                      icon: const Icon(Icons.tune_rounded, color: AppColors.textSecondary, size: 20),
+                      onPressed: _openSimulation,
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 26),
+              Reveal(
+                child: Text(
+                  '${AppConstants.deviceName.toUpperCase()}  ·  ${AppConstants.deviceId.toUpperCase()}',
+                  textAlign: TextAlign.center,
+                  style: AppTheme.label(),
                 ),
               ),
-              if (s.burglarAlarmActive) ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.alarm.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.alarm.withValues(alpha: 0.7)),
+              const SizedBox(height: 6),
+              Reveal(
+                delay: const Duration(milliseconds: 60),
+                child: Center(
+                  child: LockOrb(
+                    // Unknown state shows the neutral closed silhouette; grey + title say it's unconfirmed
+                    locked: s.isLocked || s.isUnknown || !s.hasReport,
+                    pending: s.isActionPending,
+                    dim: !confirmed && !alarm,
+                    alarm: alarm,
+                    color: color,
+                    celebrate: _celebrate,
+                    size: 248,
                   ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.crisis_alert_rounded, color: AppColors.alarm),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Alarm is sounding',
-                              style: TextStyle(
-                                color: AppColors.alarm,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            SizedBox(height: 2),
-                            Text(
-                              'The door was opened while locked.',
-                              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                ),
+              ),
+              const SizedBox(height: 2),
+              Center(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 420),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, anim) => FadeTransition(
+                    opacity: anim,
+                    child: SlideTransition(
+                      position: Tween(begin: const Offset(0, 0.25), end: Offset.zero).animate(anim),
+                      child: child,
+                    ),
+                  ),
+                  child: Text(
+                    title,
+                    key: ValueKey(title),
+                    style: AppTheme.display(fontSize: 44, letterSpacing: -2, color: color == AppColors.offline ? AppColors.textPrimary : color),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                // Only the incoming line is laid out, so quick changes never overlap
+                layoutBuilder: (current, previous) => current ?? const SizedBox.shrink(),
+                child: Text(
+                  subtitle,
+                  key: ValueKey(subtitle),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.4),
+                ),
+              ),
+              if (s.syncIssue != null) ...[
+                const SizedBox(height: 12),
+                Center(
+                  child: TextButton.icon(
+                    onPressed: _repository.retry,
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text('Try again'),
                   ),
                 ),
               ],
-              const SizedBox(height: 24),
-              Center(
-                child: BoltDial(
-                  locked: s.isLocked,
-                  pending: s.isActionPending,
-                  dim: offline,
-                  color: color,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Center(
-                child: AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 400),
-                  style: TextStyle(
-                    color: offline ? AppColors.textSecondary : color,
-                    fontSize: 38,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -1,
-                  ),
-                  child: Text(title),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
-              ),
-              const SizedBox(height: 28),
-              HoldButton(
-                label: actionLabel,
-                icon: wantsLock ? Icons.lock_rounded : Icons.lock_open_rounded,
-                color: wantsLock ? AppColors.secure : AppColors.open,
-                enabled: canAct,
-                duration: Duration(milliseconds: wantsLock ? 450 : 800),
-                onConfirmed: () => _run(wantsLock),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                child: _outcome == null
+                    ? const SizedBox(width: double.infinity)
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 18),
+                        child: _OutcomeBanner(outcome: _outcome!),
+                      ),
               ),
               const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: IntrinsicHeight(
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _Fact(
-                          label: 'Door',
-                          value: s.doorClosed ? 'Closed' : 'Open',
-                          dot: s.doorClosed ? AppColors.secure : AppColors.warning,
-                        ),
-                      ),
-                      const VerticalDivider(width: 1),
-                      Expanded(
-                        child: _Fact(
-                          label: 'Connection',
-                          value: s.isOnline ? 'Online' : 'Offline',
-                          dot: s.isOnline ? AppColors.secure : AppColors.alarm,
-                        ),
-                      ),
-                      const VerticalDivider(width: 1),
-                      Expanded(child: _Fact(label: 'Last used', value: s.lastMethod)),
-                    ],
-                  ),
+              Reveal(
+                delay: const Duration(milliseconds: 120),
+                child: SwipeToConfirm(
+                  label: actionLabel,
+                  icon: wantsLock ? Icons.lock_rounded : Icons.lock_open_rounded,
+                  color: wantsLock ? AppColors.secure : AppColors.open,
+                  enabled: canAct,
+                  onConfirmed: () => _run(wantsLock),
                 ),
               ),
-              const SizedBox(height: 32),
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Recent activity',
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
+              if (s.isLockout && s.hasReport) ...[
+                const SizedBox(height: 14),
+                _Notice(
+                  icon: Icons.lock_clock_rounded,
+                  color: AppColors.warning,
+                  title: 'Keypad locked out',
+                  body: '${AppConstants.maxPinAttempts} wrong PINs in a row. The keypad is paused for '
+                      '${AppConstants.lockoutTimeSeconds} s. The app still works.',
+                ),
+              ],
+              const SizedBox(height: 22),
+              Reveal(
+                delay: const Duration(milliseconds: 180),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _Stat(
+                        label: 'DOOR',
+                        value: !s.hasReport ? '—' : (s.doorClosed ? 'Closed' : 'Open'),
+                        icon: Icons.door_front_door_outlined,
+                        color: !confirmed ? null : (s.doorClosed ? AppColors.secure : AppColors.warning),
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _Stat(
+                        label: 'LINK',
+                        value: confirmed ? 'Online' : 'Offline',
+                        detail: s.lastHeartbeat != null ? 'seen ${agoShort(s.lastHeartbeat!)}' : null,
+                        icon: confirmed ? Icons.wifi_rounded : Icons.wifi_off_rounded,
+                        color: confirmed ? AppColors.secure : AppColors.offline,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              Reveal(
+                delay: const Duration(milliseconds: 220),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _Stat(
+                        label: 'LAST ACTION',
+                        value: s.hasReport && s.lastMethod.isNotEmpty ? s.lastMethodLabel : '—',
+                        detail: s.hasReport ? agoShort(s.lastUpdated) : null,
+                        icon: Icons.touch_app_outlined,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _Stat(
+                        label: 'KEYPAD',
+                        value: !s.hasReport ? '—' : (s.isLockout ? 'Locked out' : 'Ready'),
+                        icon: Icons.dialpad_rounded,
+                        color: !confirmed ? null : (s.isLockout ? AppColors.warning : AppColors.secure),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 30),
+              Row(
+                children: [
+                  Expanded(child: Text('RECENT ACTIVITY', style: AppTheme.label())),
                   TextButton(
                     onPressed: widget.onNavigateToHistory ??
                         () => Navigator.of(context).pushNamed(AppConstants.routeHistory),
-                    child: const Text('See all'),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [Text('View all'), SizedBox(width: 4), Icon(Icons.arrow_forward_rounded, size: 16)],
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               if (_recentEvents.isEmpty)
-                const Text(
-                  'No activity yet. Lock and unlock events will show up here.',
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                const Panel(
+                  child: Text(
+                    'No activity yet. Lock, unlock and door events will appear here.',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 13.5, height: 1.4),
+                  ),
                 )
               else
-                for (var i = 0; i < _recentEvents.length; i++)
-                  EventTile(
-                    event: _recentEvents[i],
-                    trailing: agoShort(_recentEvents[i].timestamp),
-                    showLine: i < _recentEvents.length - 1,
+                Panel(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < _recentEvents.length; i++)
+                        Reveal(
+                          key: ValueKey(_recentEvents[i].id),
+                          delay: Duration(milliseconds: 260 + 50 * i),
+                          child: EventTile(
+                            event: _recentEvents[i],
+                            trailing: agoShort(_recentEvents[i].timestamp),
+                            showLine: i < _recentEvents.length - 1,
+                          ),
+                        ),
+                    ],
                   ),
+                ),
             ],
           ),
         ),
@@ -302,47 +418,95 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-class _Fact extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color? dot;
+class _OutcomeBanner extends StatelessWidget {
+  final CommandOutcome outcome;
 
-  const _Fact({required this.label, required this.value, this.dot});
+  const _OutcomeBanner({required this.outcome});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+    final (IconData icon, Color color, String title) = switch (outcome.result) {
+      CommandResult.succeeded => (Icons.check_circle_rounded, AppColors.secure, 'Done'),
+      CommandResult.rejected => (Icons.block_rounded, AppColors.warning, 'Refused by the lock'),
+      CommandResult.failed => (Icons.error_outline_rounded, AppColors.alarm, 'Didn’t go through'),
+      CommandResult.timedOut => (Icons.hourglass_disabled_rounded, AppColors.offline, 'No answer from the lock'),
+    };
+    return _Notice(icon: icon, color: color, title: title, body: outcome.message);
+  }
+}
+
+class _Notice extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String body;
+
+  const _Notice({required this.icon, required this.color, required this.title, required this.body});
+
+  @override
+  Widget build(BuildContext context) {
+    return Panel(
+      padding: const EdgeInsets.all(14),
+      borderColor: color.withValues(alpha: 0.35),
+      color: Color.alphaBlend(color.withValues(alpha: 0.06), AppColors.surface),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(body, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.4)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  final String label;
+  final String value;
+  final String? detail;
+  final IconData icon;
+  final Color? color;
+
+  const _Stat({required this.label, required this.value, required this.icon, this.detail, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Panel(
+      padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
-          const SizedBox(height: 6),
           Row(
             children: [
-              if (dot != null) ...[
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
-                ),
-                const SizedBox(width: 7),
-              ],
-              Expanded(
-                child: Text(
-                  value,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    height: 1.2,
-                  ),
-                ),
-              ),
+              Icon(icon, size: 15, color: AppColors.textMuted),
+              const SizedBox(width: 7),
+              Expanded(child: Text(label, style: AppTheme.label())),
+              if (color != null) PulseDot(color: color!, active: false, size: 6),
             ],
           ),
+          const SizedBox(height: 10),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            child: Text(
+              value,
+              key: ValueKey(value),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTheme.display(fontSize: 18, letterSpacing: -0.5),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(detail ?? ' ', style: AppTheme.mono(fontSize: 11.5)),
         ],
       ),
     );

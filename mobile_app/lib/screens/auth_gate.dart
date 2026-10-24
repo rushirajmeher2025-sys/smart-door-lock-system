@@ -3,7 +3,11 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/firebase_init.dart';
 import '../theme/app_colors.dart';
-import '../widgets/app_loading_indicator.dart';
+import '../theme/app_theme.dart';
+import '../utils/constants.dart';
+import '../widgets/backdrop.dart';
+import '../widgets/brand_mark.dart';
+import '../widgets/panel.dart';
 import 'login_screen.dart';
 import 'main_nav_screen.dart';
 
@@ -31,18 +35,15 @@ class _AuthGateState extends State<AuthGate> {
       return StreamBuilder<User?>(
         stream: AuthService.instance.authStateChanges,
         builder: (context, snapshot) {
+          final Widget page;
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              body: AppLoadingIndicator(message: 'Verifying security credentials...'),
-            );
+            page = const _Splash(key: ValueKey('splash'));
+          } else if (snapshot.data != null) {
+            page = const MainNavScreen(key: ValueKey('home'));
+          } else {
+            page = const LoginScreen(key: ValueKey('login'));
           }
-
-          final user = snapshot.data;
-          if (user != null) {
-            return const MainNavScreen();
-          }
-
-          return const LoginScreen();
+          return AnimatedSwitcher(duration: const Duration(milliseconds: 400), child: page);
         },
       );
     }
@@ -53,111 +54,83 @@ class _AuthGateState extends State<AuthGate> {
 
   Widget _buildFirebaseConfigPrompt(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(28.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: AppColors.warning.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.warning, width: 2),
-                  ),
-                  child: const Icon(
-                    Icons.cloud_sync_outlined,
-                    color: AppColors.warning,
-                    size: 48,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  'Firebase Setup Required',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'To enable live cloud authentication, your Firebase project needs to be linked with FlutterFire.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 14,
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 28),
-
-                // Step-by-step instructions card
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: AppColors.card,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'CONFIGURATION STEPS:',
-                        style: TextStyle(
-                          color: AppColors.primaryLight,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.0,
+      backgroundColor: Colors.transparent,
+      body: Backdrop(
+        tint: AppColors.brand,
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Reveal(child: Center(child: BrandMark(size: 34))),
+                    const SizedBox(height: 40),
+                    Reveal(
+                      delay: const Duration(milliseconds: 80),
+                      child: Text('SETUP', textAlign: TextAlign.center, style: AppTheme.label()),
+                    ),
+                    const SizedBox(height: 8),
+                    Reveal(
+                      delay: const Duration(milliseconds: 120),
+                      child: Text(
+                        'Connect LocKify\nto the cloud',
+                        textAlign: TextAlign.center,
+                        style: AppTheme.display(fontSize: 30, height: 1.1),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    const Reveal(
+                      delay: Duration(milliseconds: 160),
+                      child: Text(
+                        'This build isn’t linked to a Firebase project yet. Link it once and the app talks to your real lock.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    Reveal(
+                      delay: const Duration(milliseconds: 220),
+                      child: Panel(
+                        padding: const EdgeInsets.all(18),
+                        child: Column(
+                          children: [
+                            _buildStepRow('01', 'Sign in to Firebase', 'npx firebase-tools login'),
+                            const SizedBox(height: 16),
+                            _buildStepRow('02', 'Generate the config (in mobile_app/)', 'flutterfire configure'),
+                            const SizedBox(height: 16),
+                            _buildStepRow('03', 'Turn on Email/Password sign-in', 'Console › Authentication › Sign-in method'),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 14),
-                      _buildStepRow(
-                        '1',
-                        'Login to Firebase in terminal:',
-                        'npx -y firebase-tools login',
+                    ),
+                    const SizedBox(height: 24),
+                    Reveal(
+                      delay: const Duration(milliseconds: 280),
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+                        onPressed: () => setState(() => _bypassedForDemo = true),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Explore the demo'),
+                            SizedBox(width: 8),
+                            Icon(Icons.arrow_forward_rounded, size: 18),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 12),
-                      _buildStepRow(
-                        '2',
-                        'Generate configuration files:',
-                        'flutterfire configure',
-                      ),
-                      const SizedBox(height: 12),
-                      _buildStepRow(
-                        '3',
-                        'Enable Email/Password sign-in:',
-                        'Firebase Console > Auth > Sign-in method',
-                      ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Demo mode simulates the lock so every screen works without hardware.',
+                      textAlign: TextAlign.center,
+                      style: AppTheme.mono(fontSize: 11.5),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 28),
-
-                // Button to proceed in local demo mode
-                ElevatedButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _bypassedForDemo = true;
-                    });
-                  },
-                  icon: const Icon(Icons.arrow_forward_rounded, size: 20),
-                  label: const Text('Continue in Demo / UI Mode'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    minimumSize: const Size(double.infinity, 50),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'All UI validation, screens, and error handlers remain fully functional.',
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -169,53 +142,51 @@ class _AuthGateState extends State<AuthGate> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 24,
-          height: 24,
-          decoration: const BoxDecoration(
-            color: AppColors.surfaceLight,
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Text(
-              number,
-              style: const TextStyle(
-                color: AppColors.primaryLight,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
+        Text(number, style: AppTheme.mono(fontSize: 12, color: AppColors.brand, fontWeight: FontWeight.w600)),
+        const SizedBox(width: 14),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 4),
+              Text(title, style: const TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w500)),
+              const SizedBox(height: 6),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(6),
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.hairline),
                 ),
-                child: Text(
-                  code,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    color: AppColors.accent,
-                    fontSize: 12,
-                  ),
-                ),
+                child: Text(code, style: AppTheme.mono(fontSize: 12, color: AppColors.textSecondary)),
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+class _Splash extends StatelessWidget {
+  const _Splash({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Backdrop(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const LockifyLogo(size: 56),
+              const SizedBox(height: 18),
+              Text(AppConstants.appName.toUpperCase(), style: AppTheme.label()),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

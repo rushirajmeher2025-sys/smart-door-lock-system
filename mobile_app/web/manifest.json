@@ -1,11 +1,11 @@
 {
-    "name": "smart_door_lock",
-    "short_name": "smart_door_lock",
+    "name": "LocKify",
+    "short_name": "LocKify",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#09090B",
+    "theme_color": "#09090B",
+    "description": "LocKify: control and monitor your smart door lock.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
