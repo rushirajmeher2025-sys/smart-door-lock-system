@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/firebase_init.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
 import '../utils/constants.dart';
-import '../widgets/bolt_dial.dart';
+import '../widgets/backdrop.dart';
+import '../widgets/brand_mark.dart';
+import '../widgets/panel.dart';
+import '../widgets/segment_toggle.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -146,182 +150,218 @@ class _LoginScreenState extends State<LoginScreen> {
     final demo = !FirebaseInitService.isConfigured;
 
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: BoltDial(locked: true, color: AppColors.secure, size: 96),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      _isRegisterMode ? 'Create your account' : 'Welcome back',
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 30,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.8,
+      backgroundColor: Colors.transparent,
+      body: Backdrop(
+        tint: AppColors.brand,
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Reveal(child: Center(child: LockifyLogo(size: 64))),
+                      const SizedBox(height: 22),
+                      const Reveal(
+                        delay: Duration(milliseconds: 80),
+                        child: Center(child: LockifyWordmark(fontSize: 34)),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _isRegisterMode
-                          ? 'Register to monitor and control your lock.'
-                          : 'Sign in to control ${AppConstants.appName}.',
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 15),
-                    ),
-                    const SizedBox(height: 28),
-                    SegmentedButton<bool>(
-                      showSelectedIcon: false,
-                      segments: const [
-                        ButtonSegment(value: false, label: Text('Sign in')),
-                        ButtonSegment(value: true, label: Text('Register')),
-                      ],
-                      selected: {_isRegisterMode},
-                      onSelectionChanged: (s) => setState(() {
-                        _isRegisterMode = s.first;
-                        _errorMessage = null;
-                      }),
-                    ),
-                    const SizedBox(height: 24),
-                    if (_errorMessage != null) ...[
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.alarm.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.alarm.withValues(alpha: 0.7)),
+                      const SizedBox(height: 8),
+                      Reveal(
+                        delay: const Duration(milliseconds: 140),
+                        child: Text(
+                          AppConstants.appTagline,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 15),
                         ),
+                      ),
+                      const SizedBox(height: 36),
+                      Reveal(
+                        delay: const Duration(milliseconds: 220),
+                        child: Panel(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              SegmentToggle(
+                                labels: const ['Sign in', 'Create account'],
+                                index: _isRegisterMode ? 1 : 0,
+                                onChanged: (i) => setState(() {
+                                  _isRegisterMode = i == 1;
+                                  _errorMessage = null;
+                                }),
+                              ),
+                              const SizedBox(height: 20),
+                              AnimatedSize(
+                                duration: const Duration(milliseconds: 250),
+                                curve: Curves.easeOutCubic,
+                                child: _errorMessage == null
+                                    ? const SizedBox(width: double.infinity)
+                                    : Container(
+                                        margin: const EdgeInsets.only(bottom: 16),
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.alarm.withValues(alpha: 0.08),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: AppColors.alarm.withValues(alpha: 0.35)),
+                                        ),
+                                        child: Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Icon(Icons.error_outline_rounded, color: AppColors.alarm, size: 18),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                _errorMessage!,
+                                                style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, height: 1.4),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                              ),
+                              TextFormField(
+                                controller: _emailController,
+                                keyboardType: TextInputType.emailAddress,
+                                textInputAction: TextInputAction.next,
+                                autofillHints: const [AutofillHints.email],
+                                decoration: const InputDecoration(
+                                  labelText: 'Email',
+                                  prefixIcon: Icon(Icons.alternate_email_rounded, size: 20),
+                                ),
+                                validator: (val) {
+                                  if (val == null || val.trim().isEmpty) return 'Enter your email address.';
+                                  if (!val.contains('@') || !val.contains('.')) return 'Enter a valid email address.';
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 12),
+                              TextFormField(
+                                controller: _passwordController,
+                                obscureText: _obscurePassword,
+                                textInputAction: _isRegisterMode ? TextInputAction.next : TextInputAction.done,
+                                autofillHints: const [AutofillHints.password],
+                                onFieldSubmitted: (_) {
+                                  if (!_isRegisterMode && !_isLoading) _submitAuth();
+                                },
+                                decoration: InputDecoration(
+                                  labelText: 'Password',
+                                  prefixIcon: const Icon(Icons.lock_outline_rounded, size: 20),
+                                  suffixIcon: IconButton(
+                                    tooltip: _obscurePassword ? 'Show password' : 'Hide password',
+                                    icon: Icon(
+                                      _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                      size: 20,
+                                    ),
+                                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                  ),
+                                ),
+                                validator: (val) {
+                                  if (val == null || val.isEmpty) return 'Enter your password.';
+                                  if (val.length < 6) return 'Use at least 6 characters.';
+                                  return null;
+                                },
+                              ),
+                              AnimatedSize(
+                                duration: const Duration(milliseconds: 280),
+                                curve: Curves.easeOutCubic,
+                                child: _isRegisterMode
+                                    ? Padding(
+                                        padding: const EdgeInsets.only(top: 12, bottom: 20),
+                                        child: TextFormField(
+                                          controller: _confirmPasswordController,
+                                          obscureText: _obscureConfirmPassword,
+                                          textInputAction: TextInputAction.done,
+                                          decoration: InputDecoration(
+                                            labelText: 'Confirm password',
+                                            prefixIcon: const Icon(Icons.lock_reset_rounded, size: 20),
+                                            suffixIcon: IconButton(
+                                              tooltip: _obscureConfirmPassword ? 'Show password' : 'Hide password',
+                                              icon: Icon(
+                                                _obscureConfirmPassword
+                                                    ? Icons.visibility_outlined
+                                                    : Icons.visibility_off_outlined,
+                                                size: 20,
+                                              ),
+                                              onPressed: () =>
+                                                  setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                                            ),
+                                          ),
+                                          validator: (val) {
+                                            if (!_isRegisterMode) return null;
+                                            if (val != _passwordController.text) return 'Passwords don’t match.';
+                                            return null;
+                                          },
+                                        ),
+                                      )
+                                    : Align(
+                                        alignment: Alignment.centerRight,
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 6),
+                                          child: TextButton(
+                                            onPressed: _showForgotPasswordDialog,
+                                            child: const Text('Forgot password?'),
+                                          ),
+                                        ),
+                                      ),
+                              ),
+                              FilledButton(
+                                style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+                                onPressed: _isLoading ? null : _submitAuth,
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 200),
+                                  child: _isLoading
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(strokeWidth: 2.2, color: AppColors.background),
+                                        )
+                                      : Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(_isRegisterMode ? 'Create account' : 'Sign in'),
+                                            const SizedBox(width: 8),
+                                            const Icon(Icons.arrow_forward_rounded, size: 18),
+                                          ],
+                                        ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Reveal(
+                        delay: const Duration(milliseconds: 300),
                         child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.error_outline, color: AppColors.alarm, size: 20),
-                            const SizedBox(width: 10),
-                            Expanded(
+                            Icon(
+                              demo ? Icons.science_outlined : Icons.shield_outlined,
+                              size: 14,
+                              color: AppColors.textMuted,
+                            ),
+                            const SizedBox(width: 8),
+                            Flexible(
                               child: Text(
-                                _errorMessage!,
-                                style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, height: 1.35),
+                                demo
+                                    ? 'Demo mode · any email and a 6+ character password'
+                                    : FirebaseInitService.usingEmulator
+                                        ? 'Local emulator · ${FirebaseInitService.emulatorHost}'
+                                        : 'Secured by Firebase Authentication',
+                                textAlign: TextAlign.center,
+                                style: AppTheme.mono(fontSize: 11.5),
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 16),
                     ],
-                    TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        prefixIcon: Icon(Icons.email_outlined),
-                      ),
-                      validator: (val) {
-                        if (val == null || val.trim().isEmpty) return 'Enter your email address.';
-                        if (!val.contains('@') || !val.contains('.')) return 'Enter a valid email address.';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      textInputAction: _isRegisterMode ? TextInputAction.next : TextInputAction.done,
-                      onFieldSubmitted: (_) {
-                        if (!_isRegisterMode && !_isLoading) _submitAuth();
-                      },
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock_outline_rounded),
-                        suffixIcon: IconButton(
-                          tooltip: _obscurePassword ? 'Show password' : 'Hide password',
-                          icon: Icon(
-                            _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                          ),
-                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                        ),
-                      ),
-                      validator: (val) {
-                        if (val == null || val.isEmpty) return 'Enter your password.';
-                        if (val.length < 6) return 'Use at least 6 characters.';
-                        return null;
-                      },
-                    ),
-                    if (_isRegisterMode) ...[
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _confirmPasswordController,
-                        obscureText: _obscureConfirmPassword,
-                        textInputAction: TextInputAction.done,
-                        decoration: InputDecoration(
-                          labelText: 'Confirm password',
-                          prefixIcon: const Icon(Icons.lock_reset_rounded),
-                          suffixIcon: IconButton(
-                            tooltip: _obscureConfirmPassword ? 'Show password' : 'Hide password',
-                            icon: Icon(
-                              _obscureConfirmPassword
-                                  ? Icons.visibility_outlined
-                                  : Icons.visibility_off_outlined,
-                            ),
-                            onPressed: () =>
-                                setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
-                          ),
-                        ),
-                        validator: (val) {
-                          if (!_isRegisterMode) return null;
-                          if (val != _passwordController.text) return 'Passwords don’t match.';
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 24),
-                    ] else
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: _showForgotPasswordDialog,
-                          child: const Text('Forgot password?'),
-                        ),
-                      ),
-                    FilledButton(
-                      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(54)),
-                      onPressed: _isLoading ? null : _submitAuth,
-                      child: _isLoading
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
-                            )
-                          : Text(_isRegisterMode ? 'Create account' : 'Sign in'),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          demo ? Icons.info_outline : Icons.cloud_done_outlined,
-                          size: 16,
-                          color: AppColors.textMuted,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            demo
-                                ? 'Demo mode: any valid email and a password of 6+ characters will work.'
-                                : 'Sign-in is handled securely by Firebase.',
-                            style: const TextStyle(color: AppColors.textMuted, fontSize: 12.5, height: 1.4),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),

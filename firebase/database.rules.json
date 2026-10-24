@@ -3,7 +3,7 @@
     "devices": {
       "$deviceId": {
         // Device authorization helper: user is owner, listed in authorizedUsers, or is the device itself
-        ".read": "auth != null && (data.child('metadata/ownerUid').val() === auth.uid || data.child('metadata/authorizedUsers/' + auth.uid).exists() || auth.token.isDevice === true || auth.token.admin === true)",
+        ".read": "auth != null && (data.child('metadata/ownerUid').val() === auth.uid || data.child('metadata/authorizedUsers/' + auth.uid).exists() || data.child('metadata/deviceUid').val() === auth.uid || auth.token.isDevice === true || auth.token.admin === true)",
 
         "status": {
           // Only the physical ESP32 device or admin can update status
@@ -32,7 +32,7 @@
             "action": { ".validate": "newData.val() === 'LOCK' || newData.val() === 'UNLOCK' || newData.val() === 'CLEAR_ALARM' || newData.val() === 'PING'" },
             "commandId": { ".validate": "newData.val() === $commandId" },
             "requestedAt": { ".validate": "newData.isNumber()" },
-            "requestedBy": { ".validate": "newData.val() === auth.uid || data.child('requestedBy').val() === newData.val()" },
+            "requestedBy": { ".validate": "newData.val() === auth.uid || data.val() === newData.val()" },
             "status": { ".validate": "newData.val() === 'PENDING' || newData.val() === 'PROCESSING' || newData.val() === 'EXECUTED' || newData.val() === 'REJECTED' || newData.val() === 'FAILED'" },
             "executedAt": { ".validate": "newData.isNumber() || newData.val() == null" },
             "failureReason": { ".validate": "newData.isString() || newData.val() == null" }
@@ -49,6 +49,7 @@
             "method": { ".validate": "newData.isString()" },
             "timestamp": { ".validate": "newData.isNumber()" },
             "severity": { ".validate": "newData.val() === 'normal' || newData.val() === 'warning' || newData.val() === 'alarm'" },
+            "type": { ".validate": "newData.isString()" },
             "gsmAlertSent": { ".validate": "newData.isBoolean() || newData.val() == null" }
           }
         },
@@ -57,7 +58,8 @@
           // Only the owner can write metadata and manage authorized users
           ".write": "auth != null && (data.child('ownerUid').val() === auth.uid || (!data.exists() && newData.child('ownerUid').val() === auth.uid) || auth.token.admin === true)",
           "deviceId": { ".validate": "newData.val() === $deviceId" },
-          "ownerUid": { ".validate": "newData.isString()" },
+          "ownerUid": { ".validate": "newData.isString() && (!data.exists() || data.val() === newData.val())" },
+          "deviceUid": { ".validate": "newData.isString() && newData.val().length > 0" },
           "deviceName": { ".validate": "newData.isString()" },
           "firmwareVersion": { ".validate": "newData.isString()" },
           "hardware": { ".validate": "newData.isString()" }

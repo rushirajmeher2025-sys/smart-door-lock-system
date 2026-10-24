@@ -1,8 +1,16 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../models/lock_state.dart';
+import '../repositories/lock_repository.dart';
 import '../services/auth_service.dart';
 import '../services/firebase_init.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
 import '../utils/constants.dart';
+import '../widgets/backdrop.dart';
+import '../widgets/brand_mark.dart';
+import '../widgets/panel.dart';
 import '../widgets/screen_header.dart';
 import '../widgets/settings_group.dart';
 
@@ -14,56 +22,70 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _pushNotifications = true;
-  bool _intruderSmsAlerts = true;
-  bool _doorAjarAlerts = true;
+  final LockRepository _repository = lockRepository();
+  late DoorLockState _lockState = _repository.currentState;
+  StreamSubscription<DoorLockState>? _stateSub;
 
-  final List<String> _gsmPhoneNumbers = [
-    '+91 81970 37510',
-    '+91 75258 26839',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _stateSub = _repository.stateStream.listen((s) {
+      if (mounted) setState(() => _lockState = s);
+    });
+  }
 
-  void _showAddPhoneDialog() {
+  @override
+  void dispose() {
+    _stateSub?.cancel();
+    super.dispose();
+  }
+
+  void _toast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _copy(String text, String what) {
+    Clipboard.setData(ClipboardData(text: text));
+    _toast('$what copied');
+  }
+
+  Future<void> _askForUid({
+    required String title,
+    required String body,
+    required String action,
+    required Future<void> Function(String uid) onSubmit,
+  }) async {
     final controller = TextEditingController();
-    showDialog<void>(
+    final uid = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Add alert number'),
+        title: Text(title),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('The lock sends an SMS to this number when something happens.'),
+            Text(body),
             const SizedBox(height: 16),
             TextField(
               controller: controller,
               autofocus: true,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Phone number',
-                hintText: '+91 98765 43210',
-                prefixIcon: Icon(Icons.phone_outlined),
-              ),
+              style: AppTheme.mono(fontSize: 13, color: AppColors.textPrimary),
+              decoration: const InputDecoration(labelText: 'User ID', prefixIcon: Icon(Icons.fingerprint_rounded)),
             ),
           ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              final text = controller.text.trim();
-              if (text.isEmpty) return;
-              setState(() => _gsmPhoneNumbers.add(text));
-              Navigator.of(ctx).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('$text will get SMS alerts')),
-              );
-            },
-            child: const Text('Add number'),
-          ),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(controller.text.trim()), child: Text(action)),
         ],
       ),
     );
+    if (uid == null || uid.isEmpty) return;
+    try {
+      await onSubmit(uid);
+    } catch (e) {
+      _toast('Couldn’t save: $e');
+    }
   }
 
   void _showLogoutConfirmation() {
@@ -75,7 +97,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.alarm),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.alarm, foregroundColor: Colors.white),
             onPressed: () async {
               Navigator.of(ctx).pop();
               try {
@@ -84,7 +106,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 }
               } catch (_) {}
               if (!mounted) return;
-              Navigator.of(context).pushReplacementNamed(AppConstants.routeLogin);
+              // Back through the auth gate so signing in again lands on the dashboard
+              Navigator.of(context).pushNamedAndRemoveUntil(AppConstants.routeGate, (_) => false);
             },
             child: const Text('Sign out'),
           ),
@@ -95,187 +118,231 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final email = AuthService.instance.currentUser?.email ?? 'rushi.rajmeher2025@vitstudent.ac.in';
+    final demo = _repository.isSimulation;
+    final email = FirebaseInitService.isConfigured ? (AuthService.instance.currentUser?.email ?? '') : 'demo@lockify.app';
     final initial = email.isEmpty ? '?' : email[0].toUpperCase();
+    final s = _lockState;
 
     return Scaffold(
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-          children: [
-            const ScreenHeader(title: 'Settings'),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Container(
-                  width: 52,
-                  height: 52,
-                  alignment: Alignment.center,
-                  decoration: const BoxDecoration(
-                    color: AppColors.surfaceLight,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Text(
-                    initial,
-                    style: const TextStyle(
-                      color: AppColors.primaryLight,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
+      backgroundColor: Colors.transparent,
+      body: Backdrop(
+        child: SafeArea(
+          bottom: false,
+          child: ValueListenableBuilder<LockAccess>(
+            valueListenable: _repository.access,
+            builder: (context, access, _) {
+              final role = switch (access.status) {
+                AccessStatus.owner => ('OWNER', AppColors.brand),
+                AccessStatus.member => ('MEMBER', AppColors.textSecondary),
+                AccessStatus.demo => ('DEMO', AppColors.textSecondary),
+                AccessStatus.denied => ('NO ACCESS', AppColors.alarm),
+                AccessStatus.error => ('ERROR', AppColors.alarm),
+                AccessStatus.checking => ('CHECKING', AppColors.textMuted),
+              };
+              return ListView(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 120),
+                children: [
+                  const ScreenHeader(title: 'Settings', subtitle: AppConstants.appName),
+                  const SizedBox(height: 22),
+                  Reveal(
+                    child: Panel(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 46,
+                                height: 46,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceLight,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: AppColors.hairline),
+                                ),
+                                child: Text(initial, style: AppTheme.display(fontSize: 18, letterSpacing: 0)),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      email,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, letterSpacing: -0.2),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Pill(label: role.$1, color: role.$2, icon: Icons.verified_user_outlined),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (access.uid != null && !demo) ...[
+                            const SizedBox(height: 14),
+                            const Divider(),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Text('USER ID', style: AppTheme.label()),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(access.uid!, overflow: TextOverflow.ellipsis, style: AppTheme.mono(fontSize: 12, color: AppColors.textSecondary)),
+                                ),
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  tooltip: 'Copy user ID',
+                                  icon: const Icon(Icons.copy_rounded, size: 16),
+                                  onPressed: () => _copy(access.uid!, 'User ID'),
+                                ),
+                              ],
+                            ),
+                          ],
+                          if (access.message != null) ...[
+                            const SizedBox(height: 8),
+                            Text(access.message!, style: const TextStyle(color: AppColors.alarm, fontSize: 13, height: 1.4)),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Master Administrator',
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
+                  const SizedBox(height: 28),
+                  Reveal(
+                    delay: const Duration(milliseconds: 60),
+                    child: SettingsGroup(
+                      title: 'Lock hardware',
+                      footer: access.isOwner && !access.hardwareLinked
+                          ? 'The lock prints its user ID in the Arduino Serial Monitor (115200 baud) when it starts.'
+                          : null,
+                      children: [
+                        _InfoRow(icon: Icons.memory_rounded, title: AppConstants.deviceName, subtitle: 'ESP32 DevKit V4', value: AppConstants.deviceId, mono: true),
+                        _InfoRow(
+                          icon: s.isConfirmed ? Icons.wifi_rounded : Icons.wifi_off_rounded,
+                          title: 'Connection',
+                          subtitle: s.isConfirmed ? 'Reporting every 10 s' : 'Not reporting right now',
+                          value: s.isConfirmed ? 'Online' : 'Offline',
+                          valueColor: s.isConfirmed ? AppColors.brand : AppColors.textMuted,
                         ),
+                        _InfoRow(
+                          icon: Icons.developer_board_rounded,
+                          title: 'Firmware',
+                          subtitle: 'ESA Smart Door Lock',
+                          value: s.firmwareVersion != null ? 'v${s.firmwareVersion}' : '—',
+                          mono: true,
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.link_rounded),
+                          title: const Text('Lock account'),
+                          subtitle: Text(access.hardwareLinked ? 'Linked, the lock can report and take commands' : 'Not linked yet'),
+                          trailing: access.hardwareLinked
+                              ? const Icon(Icons.check_circle_rounded, color: AppColors.brand, size: 20)
+                              : (access.isOwner ? const Icon(Icons.chevron_right_rounded) : null),
+                          onTap: access.isOwner
+                              ? () => _askForUid(
+                                    title: 'Link the lock',
+                                    body: 'Paste the user ID of the lock’s own Firebase account so it can report and receive commands.',
+                                    action: 'Link',
+                                    onSubmit: (uid) async {
+                                      await _repository.linkHardware(uid);
+                                      _toast('Lock account linked');
+                                    },
+                                  )
+                              : null,
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (access.isOwner) ...[
+                    const SizedBox(height: 28),
+                    Reveal(
+                      delay: const Duration(milliseconds: 100),
+                      child: SettingsGroup(
+                        title: 'People with access',
+                        footer: 'They create an account in LocKify, then send you the user ID from their Settings.',
+                        children: [
+                          for (final uid in access.members.keys)
+                            ListTile(
+                              leading: const Icon(Icons.person_outline_rounded),
+                              title: Text(uid, overflow: TextOverflow.ellipsis, style: AppTheme.mono(fontSize: 12.5, color: AppColors.textPrimary)),
+                              trailing: IconButton(
+                                tooltip: 'Remove access',
+                                icon: const Icon(Icons.close_rounded, size: 18),
+                                onPressed: () => _repository.setMember(uid, false),
+                              ),
+                            ),
+                          ListTile(
+                            leading: const Icon(Icons.person_add_alt_rounded, color: AppColors.textPrimary),
+                            title: const Text('Add a person'),
+                            onTap: () => _askForUid(
+                              title: 'Give access',
+                              body: 'They’ll be able to see the lock and lock or unlock it.',
+                              action: 'Give access',
+                              onSubmit: (uid) async {
+                                await _repository.setMember(uid, true);
+                                _toast('Access granted');
+                              },
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        email,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    ),
+                  ],
+                  const SizedBox(height: 28),
+                  Reveal(
+                    delay: const Duration(milliseconds: 140),
+                    child: const SettingsGroup(
+                      title: 'Lock behavior',
+                      footer: 'Set in the firmware (config.h). The keypad PIN never leaves the lock.',
+                      children: [
+                        _InfoRow(icon: Icons.pin_outlined, title: 'Keypad PIN', subtitle: '${AppConstants.minPinLength} to ${AppConstants.maxPinLength} digits, change with C', value: 'On lock'),
+                        _InfoRow(icon: Icons.timer_outlined, title: 'Auto-lock', subtitle: 'After the door closes', value: '${AppConstants.autoLockDelaySeconds} s', mono: true),
+                        _InfoRow(icon: Icons.lock_clock_outlined, title: 'PIN lockout', subtitle: 'After ${AppConstants.maxPinAttempts} wrong entries', value: '${AppConstants.lockoutTimeSeconds} s', mono: true),
+                        _InfoRow(icon: Icons.sensor_door_outlined, title: 'Door left open', subtitle: 'Gentle beeps', value: '${AppConstants.doorWarningSeconds} s', mono: true),
+                        _InfoRow(icon: Icons.crisis_alert_rounded, title: 'Break-in alarm', subtitle: 'Only the keypad PIN stops it', value: '30 s', mono: true),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  const Reveal(
+                    delay: Duration(milliseconds: 180),
+                    child: SettingsGroup(
+                      title: 'SMS alerts',
+                      children: [
+                        ListTile(
+                          leading: Icon(Icons.sms_outlined),
+                          title: Text('Text messages on break-ins'),
+                          subtitle: Text('Arrives with the GSM module'),
+                          trailing: Pill(label: 'SOON', color: AppColors.textMuted, icon: Icons.schedule_rounded),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  SettingsGroup(
+                    title: 'Account',
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.logout_rounded, color: AppColors.alarm),
+                        title: const Text('Sign out', style: TextStyle(color: AppColors.alarm)),
+                        onTap: _showLogoutConfirmation,
                       ),
                     ],
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 28),
-            SettingsGroup(
-              title: 'Lock behavior',
-              children: [
-                const _InfoRow(
-                  icon: Icons.pin_outlined,
-                  title: 'Keypad PIN',
-                  subtitle: 'Stored on the lock, 4 to 8 digits',
-                  value: 'Set',
-                ),
-                _InfoRow(
-                  icon: Icons.timer_outlined,
-                  title: 'Auto-lock',
-                  subtitle: 'Locks after the door closes',
-                  value: '${AppConstants.autoLockDelaySeconds} s',
-                ),
-                _InfoRow(
-                  icon: Icons.lock_clock_outlined,
-                  title: 'PIN lockout',
-                  subtitle: 'After ${AppConstants.maxPinAttempts} wrong entries',
-                  value: '${AppConstants.lockoutTimeSeconds} s',
-                ),
-              ],
-            ),
-            const SizedBox(height: 28),
-            SettingsGroup(
-              title: 'Alerts',
-              children: [
-                _SwitchRow(
-                  icon: Icons.notifications_active_outlined,
-                  title: 'Push notifications',
-                  subtitle: 'Every lock and unlock',
-                  value: _pushNotifications,
-                  onChanged: (v) => setState(() => _pushNotifications = v),
-                ),
-                _SwitchRow(
-                  icon: Icons.crisis_alert_rounded,
-                  title: 'Break-in siren',
-                  subtitle: 'Sounds when the door is forced open',
-                  value: _intruderSmsAlerts,
-                  onChanged: (v) => setState(() => _intruderSmsAlerts = v),
-                ),
-                _SwitchRow(
-                  icon: Icons.door_front_door_outlined,
-                  title: 'Door left open',
-                  subtitle: 'Beeps after ${AppConstants.doorWarningSeconds} s',
-                  value: _doorAjarAlerts,
-                  onChanged: (v) => setState(() => _doorAjarAlerts = v),
-                ),
-              ],
-            ),
-            const SizedBox(height: 28),
-            SettingsGroup(
-              title: 'SMS recipients',
-              children: [
-                for (var i = 0; i < _gsmPhoneNumbers.length; i++)
-                  ListTile(
-                    leading: const Icon(Icons.sms_outlined),
-                    title: Text(_gsmPhoneNumbers[i]),
-                    subtitle: Text(i == 0 ? 'Primary contact' : 'Backup contact'),
-                    trailing: IconButton(
-                      tooltip: 'Remove',
-                      icon: const Icon(Icons.close_rounded, size: 20),
-                      onPressed: () => setState(() => _gsmPhoneNumbers.removeAt(i)),
+                  const SizedBox(height: 32),
+                  Center(
+                    child: Column(
+                      children: [
+                        const LockifyLogo(size: 28, live: false),
+                        const SizedBox(height: 10),
+                        Text('${AppConstants.appName.toUpperCase()} ${AppConstants.appVersion}', style: AppTheme.label()),
+                      ],
                     ),
                   ),
-                ListTile(
-                  leading: const Icon(Icons.add_rounded, color: AppColors.primaryLight),
-                  title: const Text(
-                    'Add a number',
-                    style: TextStyle(color: AppColors.primaryLight, fontWeight: FontWeight.w600),
-                  ),
-                  onTap: _showAddPhoneDialog,
-                ),
-              ],
-            ),
-            const SizedBox(height: 28),
-            const SettingsGroup(
-              title: 'Hardware',
-              children: [
-                _InfoRow(
-                  icon: Icons.memory_rounded,
-                  title: 'Controller',
-                  subtitle: 'ESP32 DevKit V4',
-                  value: '240 MHz',
-                ),
-                _InfoRow(
-                  icon: Icons.settings_input_component_outlined,
-                  title: 'Deadbolt actuator',
-                  subtitle: 'SG90 servo on GPIO 18',
-                  value: '0° / 90°',
-                ),
-                _InfoRow(
-                  icon: Icons.sim_card_outlined,
-                  title: 'Cellular modem',
-                  subtitle: 'SIM800L for SMS alerts',
-                  value: 'UART',
-                ),
-                _InfoRow(
-                  icon: Icons.verified_user_outlined,
-                  title: 'Firmware',
-                  subtitle: 'ESA Smart Door Lock',
-                  value: 'v2.9',
-                ),
-              ],
-            ),
-            const SizedBox(height: 28),
-            SettingsGroup(
-              title: 'Account',
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.logout_rounded, color: AppColors.alarm),
-                  title: const Text(
-                    'Sign out',
-                    style: TextStyle(color: AppColors.alarm, fontWeight: FontWeight.w600),
-                  ),
-                  onTap: _showLogoutConfirmation,
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Center(
-              child: Text(
-                '${AppConstants.appName} ${AppConstants.appVersion}',
-                style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
-              ),
-            ),
-          ],
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
@@ -287,55 +354,31 @@ class _InfoRow extends StatelessWidget {
   final String title;
   final String subtitle;
   final String value;
+  final Color? valueColor;
+  final bool mono;
 
   const _InfoRow({
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.value,
+    this.valueColor,
+    this.mono = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final color = valueColor ?? AppColors.textSecondary;
     return ListTile(
       leading: Icon(icon),
       title: Text(title),
       subtitle: Text(subtitle),
       trailing: Text(
         value,
-        style: const TextStyle(
-          color: AppColors.textSecondary,
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-        ),
+        style: mono
+            ? AppTheme.mono(fontSize: 12.5, color: color)
+            : TextStyle(color: color, fontSize: 13.5, fontWeight: FontWeight.w500),
       ),
-    );
-  }
-}
-
-class _SwitchRow extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  const _SwitchRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(title),
-      subtitle: Text(subtitle),
-      trailing: Switch(value: value, onChanged: onChanged),
-      onTap: () => onChanged(!value),
     );
   }
 }

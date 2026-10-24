@@ -1,17 +1,23 @@
-# smart_door_lock
+# LocKify app
 
-A new Flutter project.
+Flutter app for the Smart Door Lock System. See [../docs/SETUP.md](../docs/SETUP.md) for connecting it to Firebase and the lock.
 
-## Getting Started
+## Run it
 
-This project is a starting point for a Flutter application.
+```bash
+flutter pub get
+flutter run -d chrome                                          # Demo mode until Firebase is configured
+flutter run -d chrome --dart-define=LOCKIFY_EMULATOR=127.0.0.1 # against the local Firebase emulator
+flutter test
+```
 
-A few resources to get you started if this is your first Flutter project:
+While `flutter run` is active, press `r` to hot reload after saving and `R` to restart.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Layout
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- `lib/repositories/lock_repository.dart`: the interface the screens use, plus command outcomes.
+- `lib/repositories/firebase_lock_repository.dart`: live data from `/devices/{deviceId}` (status, events, commands, access).
+- `lib/repositories/mock_lock_repository.dart`: Demo mode; applies the same safety rules as the firmware.
+- `lib/screens/`: auth gate, login, dashboard, activity, settings.
+- `lib/widgets/`: `LockOrb` (animated padlock), `SwipeToConfirm`, `IntroOverlay` (launch animation), `Backdrop`, `Panel`.
+- `lib/utils/constants.dart`: app name, tagline, device ID (must match the firmware's `DEVICE_ID`), timings.

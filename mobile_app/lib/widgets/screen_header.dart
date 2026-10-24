@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../theme/app_colors.dart';
+import '../theme/app_theme.dart';
 
 class ScreenHeader extends StatelessWidget {
   final String title;
@@ -22,24 +22,12 @@ class ScreenHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 30,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.8,
-                  height: 1.1,
-                ),
-              ),
               if (subtitle != null)
                 Padding(
-                  padding: const EdgeInsets.only(top: 3),
-                  child: Text(
-                    subtitle!,
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                  ),
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(subtitle!.toUpperCase(), style: AppTheme.label()),
                 ),
+              Text(title, style: AppTheme.display(fontSize: 30, height: 1.05)),
             ],
           ),
         ),

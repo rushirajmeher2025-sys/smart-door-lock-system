@@ -41,7 +41,10 @@ Represents the genuine, confirmed state of the physical lock reported by the ESP
 | `burglarAlarmActive`| `boolean`| `true` if door was forced open while locked. | `false` |
 | `isLockout` | `boolean` | `true` if 3 failed PIN attempts triggered a 10s lockout. | `false` |
 | `lastMethod` | `string` | Method of last actuation (`keypad`, `button`, `app`, `auto`). | `"keypad"` |
-| `lastProcessedCommandId`| `string`| ID of the most recently executed remote command. | `"cmd_1729729810"` |
+| `lastProcessedCommandId`| `string`| ID of the most recently executed remote command. | `"-OBx3kq..."` |
+| `firmwareVersion` | `string` | Firmware build reporting this status. | `"3.0"` |
+
+`lastUpdated` changes only when the lock state changes; `lastHeartbeat` is refreshed every 10 s. The app treats the lock as offline when `lastHeartbeat` is older than 35 s.
 
 ---
 
@@ -54,13 +57,13 @@ Queue of remote actuation requests issued by authorized mobile app users.
 
 | Field | Type | Allowed Values / Validation | Description |
 | :--- | :--- | :--- | :--- |
-| `commandId` | `string` | Must match `$commandId` node key. | Unique command identifier. |
+| `commandId` | `string` | Must match `$commandId` node key. | Firebase push ID (time-ordered), so the lock can read the newest few with `orderBy="$key"&limitToLast=5`. |
 | `action` | `string` | `"LOCK"`, `"UNLOCK"`, `"CLEAR_ALARM"`, `"PING"` | Requested operation. |
 | `requestedBy` | `string` | Must equal `auth.uid`. | UID of the requesting mobile user. |
-| `requestedAt` | `number` | Epoch timestamp (ms). | When the user tapped confirm in the app. |
+| `requestedAt` | `number` | Epoch timestamp (ms), written as the server timestamp. | The lock rejects commands more than 15 s old as `EXPIRED`. |
 | `status` | `string` | `"PENDING"`, `"PROCESSING"`, `"EXECUTED"`, `"REJECTED"`, `"FAILED"` | Command lifecycle state. |
 | `executedAt` | `number` | Epoch timestamp (ms) or null. | When ESP32 completed servo rotation. |
-| `failureReason` | `string` | `"BLOCKED_DOOR_OPEN"`, `"DEVICE_OFFLINE"`, etc. | Reason if rejected by firmware safety. |
+| `failureReason` | `string` | `BLOCKED_DOOR_OPEN`, `ALARM_PIN_REQUIRED`, `ALARM_ACTIVE`, `EXPIRED`, `UNAUTHORIZED`, `MALFORMED`, `LOCK_BUSY` | Reason if rejected by firmware safety. |
 
 ---
 
@@ -71,7 +74,8 @@ Append-only chronological audit trail of all security events and physical activi
 
 | Field | Type | Description | Example |
 | :--- | :--- | :--- | :--- |
-| `title` | `string` | Human-readable event summary. | `"Burglar Alarm Siren"` |
+| `type` | `string` | Firmware event name (`unlock`, `lock`, `failed_attempt`, `lockout`, `door_opened`, `door_closed`, `burglar_alarm`, `alarm_cleared`, `door_warning`, `pin_changed`, `lock_online`, `lock_reconnected`, `rej_<REASON>`). | `"burglar_alarm"` |
+| `title` | `string` | Human-readable event summary. | `"Break-in alarm"` |
 | `description` | `string` | Detailed contextual explanation. | `"Door opened while locked (30s siren)"` |
 | `method` | `string` | Trigger source (`Keypad PIN`, `Sensor GPIO 5`, etc.). | `"Intrusion Sensor"` |
 | `timestamp` | `number` | Epoch timestamp (ms) of the event. | `1729729800000` |
@@ -89,7 +93,8 @@ Stores hardware identity, owner UID, and the access-control list (ACL) of permit
 | :--- | :--- | :--- | :--- |
 | `deviceId` | `string` | Unique hardware identifier. | `"esp32_lock_01"` |
 | `deviceName` | `string` | Friendly display name. | `"Front Entrance Lock"` |
-| `ownerUid` | `string` | UID of the primary administrator. | `"user_abc123"` |
+| `ownerUid` | `string` | UID of the primary administrator. Set once when the first account claims the lock; cannot be changed. | `"user_abc123"` |
+| `deviceUid` | `string` | UID of the lock's own Firebase account. Linked by the owner in the app (Settings › Lock account). | `"lock_uid_789"` |
 | `authorizedUsers` | `map` | Map of permitted UIDs (`{ "uid_xyz": true }`). | `{ "uid_456": true }` |
 | `firmwareVersion` | `string` | ESP32 firmware release string. | `"2.9"` |
 | `hardware` | `string` | Microcontroller & module model. | `"ESP32 DevKit V4"` |
