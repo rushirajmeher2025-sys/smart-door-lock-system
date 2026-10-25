@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import '../models/lock_state.dart';
 import '../models/remote_command.dart';
 import '../models/security_event.dart';
@@ -13,6 +15,7 @@ class MockLockRepository implements LockRepository {
   static final MockLockRepository instance = MockLockRepository._internal();
   MockLockRepository._internal() {
     _initSampleEvents();
+    _startHardwarePolling();
   }
 
   DoorLockState _currentState = DoorLockState.initial();
@@ -23,6 +26,41 @@ class MockLockRepository implements LockRepository {
 
   final _stateController = StreamController<DoorLockState>.broadcast();
   final _eventsController = StreamController<List<SecurityEvent>>.broadcast();
+  Timer? _pollTimer;
+
+  void _startHardwarePolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(milliseconds: 700), (_) => _syncWithHardware());
+  }
+
+  Future<void> _syncWithHardware() async {
+    try {
+      final res = await http.get(Uri.parse('http://localhost:8080/api/status')).timeout(const Duration(milliseconds: 500));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final bool isLocked = data['isLocked'] == true;
+        final bool doorClosed = data['doorClosed'] == true;
+        final bool alarmActive = data['alarmActive'] == true;
+        final bool connected = data['connected'] == true;
+
+        final newLockStatus = isLocked ? LockStatus.locked : LockStatus.unlocked;
+        if (_currentState.lockStatus != newLockStatus ||
+            _currentState.doorClosed != doorClosed ||
+            _currentState.burglarAlarmActive != alarmActive ||
+            _currentState.isOnline != connected) {
+          _emit(_currentState.copyWith(
+            lockStatus: newLockStatus,
+            doorClosed: doorClosed,
+            burglarAlarmActive: alarmActive,
+            isOnline: connected,
+            lastUpdated: DateTime.now(),
+          ));
+        }
+      }
+    } catch (_) {
+      // Offline fallback
+    }
+  }
 
   @override
   bool get isSimulation => true;
@@ -88,9 +126,20 @@ class MockLockRepository implements LockRepository {
     }
 
     _emit(_currentState.copyWith(isActionPending: true, pendingActionMessage: 'Sending to the lock…'));
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(const Duration(milliseconds: 300));
     _emit(_currentState.copyWith(isActionPending: true, pendingActionMessage: 'The lock is moving the bolt…'));
-    await Future.delayed(const Duration(milliseconds: 900));
+
+    // Forward command to real ESP32 hardware bridge
+    final locking = action == RemoteAction.lock;
+    try {
+      await http.post(
+        Uri.parse('http://localhost:8080/api/command'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'command': locking ? 'LOCK' : 'UNLOCK'}),
+      ).timeout(const Duration(seconds: 2));
+    } catch (_) {}
+
+    await Future.delayed(const Duration(milliseconds: 500));
 
     String? reason;
     if (action == RemoteAction.unlock && _currentState.burglarAlarmActive) reason = 'ALARM_PIN_REQUIRED';
@@ -105,7 +154,6 @@ class MockLockRepository implements LockRepository {
       return CommandOutcome(CommandResult.rejected, CommandOutcome.describeReason(reason));
     }
 
-    final locking = action == RemoteAction.lock;
     _emit(_currentState.copyWith(
       lockStatus: locking ? LockStatus.locked : LockStatus.unlocked,
       lastMethod: 'app',
@@ -124,6 +172,7 @@ class MockLockRepository implements LockRepository {
       locking ? 'Locked. The lock confirmed it.' : 'Unlocked. The lock confirmed it.',
     );
   }
+
 
   @override
   Future<void> linkHardware(String deviceUid) async {

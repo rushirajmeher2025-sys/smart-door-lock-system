@@ -918,9 +918,45 @@ void setup() {
   Serial.println("==============================");
 }
 
+// ===================== SERIAL COMMANDS =====================
+
+void handleSerialCommands() {
+  while (Serial.available()) {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
+    if (cmd.length() == 0) continue;
+
+    if (cmd == "UNLOCK") {
+      unlockDoor("serial_app");
+    } else if (cmd == "LOCK") {
+      lockDoor("serial_app");
+    } else if (cmd == "DOOR_TOGGLE") {
+      doorClosed = !doorClosed;
+      handleDoorChange();
+    } else if (cmd == "INSIDE_BUTTON") {
+      Serial.println("[BUTTON] Inside button pressed");
+      if (burglarAlarmActive && !BURGLAR_BUTTON_CAN_SILENCE) {
+        showTimed("ALARM ACTIVE", "Enter PIN to stop", TIMED_MSG_DEFAULT);
+        playError();
+      } else if (isLocked) {
+        unlockDoor("button");
+      } else {
+        lockDoor("button");
+      }
+    } else if (cmd.startsWith("KEY:")) {
+      char k = cmd.charAt(4);
+      handleKeypress(k);
+    } else if (cmd == "STATUS") {
+      logEvent("status", "query");
+    }
+  }
+}
+
 // ===================== LOOP =====================
 
 void loop() {
+  handleSerialCommands();
+
   buzzerUpdate();
   servoUpdate();
   servoRefresh();
@@ -939,6 +975,16 @@ void loop() {
   // Keypad - skip during lockout or while a timed message is showing
   if (lockout || timedMsgActive) return;
 
+  static char lastPhysicalKey = NO_KEY;
+  static unsigned long lastPhysicalKeyTime = 0;
   char key = keypad.getKey();
-  if (key != NO_KEY) handleKeypress(key);
+  if (key != NO_KEY) {
+    if (key != lastPhysicalKey || (millis() - lastPhysicalKeyTime > 300)) {
+      lastPhysicalKey = key;
+      lastPhysicalKeyTime = millis();
+      handleKeypress(key);
+    }
+  } else {
+    lastPhysicalKey = NO_KEY;
+  }
 }
