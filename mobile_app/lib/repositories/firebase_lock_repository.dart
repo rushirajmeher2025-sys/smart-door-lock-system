@@ -24,6 +24,7 @@ class FirebaseLockRepository implements LockRepository {
   final _stateController = StreamController<DoorLockState>.broadcast();
   final _eventsController = StreamController<List<SecurityEvent>>.broadcast();
   final _pendingRequestsController = StreamController<List<AccessRequest>>.broadcast();
+  final _pinController = StreamController<String?>.broadcast();
   final _access = ValueNotifier<LockAccess>(const LockAccess(AccessStatus.checking));
 
   DoorLockState _report = DoorLockState.waiting();
@@ -31,6 +32,7 @@ class FirebaseLockRepository implements LockRepository {
   List<SecurityEvent> _events = const [];
   List<AccessRequest> _pendingRequests = const [];
   AccessRequest? _myRequest;
+  String? _currentPin;
   bool _eventsLoaded = false;
   String? _eventsError;
   bool _pending = false;
@@ -55,6 +57,10 @@ class FirebaseLockRepository implements LockRepository {
   @override
   List<AccessRequest> get currentPendingRequests => _pendingRequests;
   @override
+  Stream<String?> get pinStream => _pinController.stream;
+  @override
+  String? get currentPin => _currentPin;
+  @override
   DoorLockState get currentState => _state;
   @override
   List<SecurityEvent> get currentEvents => _events;
@@ -75,6 +81,7 @@ class FirebaseLockRepository implements LockRepository {
   Future<void> dispose() async {
     await _authSub?.cancel();
     await _disconnect();
+    await _pinController.close();
     _started = false;
   }
 
@@ -87,6 +94,8 @@ class FirebaseLockRepository implements LockRepository {
       _report = DoorLockState.waiting();
       _events = const [];
       _eventsLoaded = false;
+      _currentPin = null;
+      _pinController.add(null);
       _emit();
       _eventsController.add(_events);
       return;
@@ -132,6 +141,12 @@ class FirebaseLockRepository implements LockRepository {
         message: cur.message,
         myRequest: _myRequest,
       );
+    }));
+
+    _subs.add(_device.child('pin/currentPin').onValue.listen((e) {
+      final v = e.snapshot.value;
+      _currentPin = v?.toString();
+      _pinController.add(_currentPin);
     }));
 
     _subs.add(_device.child('metadata').onValue.listen(
@@ -390,6 +405,23 @@ class FirebaseLockRepository implements LockRepository {
   Future<void> rejectRequest(String uid) async {
     await _device.child('metadata/authorizedUsers/${uid.trim()}').remove();
     await _device.child('requests/${uid.trim()}/status').set('REJECTED');
+  }
+
+  @override
+  Future<void> updatePin(String newPin) async {
+    final user = _user;
+    if (user == null) throw Exception('Must be signed in to update PIN');
+    final cleaned = newPin.trim();
+    if (cleaned.length < 4 || cleaned.length > 8 || !RegExp(r'^\d+$').hasMatch(cleaned)) {
+      throw Exception('PIN must be 4 to 8 digits');
+    }
+    await _device.child('pin').set({
+      'currentPin': cleaned,
+      'updatedAt': ServerValue.timestamp,
+      'updatedBy': user.uid,
+    });
+    _currentPin = cleaned;
+    _pinController.add(cleaned);
   }
 
   @override

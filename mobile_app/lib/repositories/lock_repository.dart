@@ -107,6 +107,11 @@ abstract class LockRepository {
   /// Owner only: reject a pending access request.
   Future<void> rejectRequest(String uid);
 
+  /// Keypad PIN synchronization
+  Stream<String?> get pinStream;
+  String? get currentPin;
+  Future<void> updatePin(String newPin);
+
   /// Re-reads access and status, e.g. after an error.
   Future<void> retry();
 }

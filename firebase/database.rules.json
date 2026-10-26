@@ -53,6 +53,16 @@
           }
         },
 
+        "pin": {
+          // Keypad PIN: only authorized members, owner, or physical device can read/write
+          ".read": "auth != null && (root.child('devices/' + $deviceId + '/metadata/ownerUid').val() === auth.uid || root.child('devices/' + $deviceId + '/metadata/authorizedUsers/' + auth.uid).val() === true || root.child('devices/' + $deviceId + '/metadata/deviceUid').val() === auth.uid)",
+          ".write": "auth != null && (root.child('devices/' + $deviceId + '/metadata/ownerUid').val() === auth.uid || root.child('devices/' + $deviceId + '/metadata/authorizedUsers/' + auth.uid).val() === true || root.child('devices/' + $deviceId + '/metadata/deviceUid').val() === auth.uid)",
+          ".validate": "newData.hasChildren(['currentPin', 'updatedAt'])",
+          "currentPin": { ".validate": "newData.isString() && newData.val().length >= 4 && newData.val().length <= 8" },
+          "updatedAt": { ".validate": "newData.isNumber()" },
+          "updatedBy": { ".validate": "newData.isString() || newData.val() == null" }
+        },
+
         "events": {
           // Only device can write events; authorized users can read
           ".write": "auth != null && (auth.token.isDevice === true || root.child('devices/' + $deviceId + '/metadata/deviceUid').val() === auth.uid || root.child('devices/' + $deviceId + '/metadata/ownerUid').val() === auth.uid)",

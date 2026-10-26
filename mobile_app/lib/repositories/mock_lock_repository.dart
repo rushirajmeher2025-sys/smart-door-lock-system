@@ -229,6 +229,22 @@ class MockLockRepository implements LockRepository {
     await setMember(uid, false);
   }
 
+  final _pinController = StreamController<String?>.broadcast();
+  String _pin = '1234';
+
+  @override
+  Stream<String?> get pinStream => _pinController.stream;
+
+  @override
+  String? get currentPin => _pin;
+
+  @override
+  Future<void> updatePin(String newPin) async {
+    _pin = newPin;
+    _pinController.add(_pin);
+    _addEvent('pin_changed', 'PIN updated', 'PIN changed from app', 'LocKify app', EventSeverity.normal);
+  }
+
   @override
   Future<void> retry() async {}
 

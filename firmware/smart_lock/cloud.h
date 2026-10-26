@@ -51,4 +51,13 @@ void cloudCommandDone(const CloudCommand& cmd, bool executed, const char* reason
 // True while the lock is signed in to Firebase and reporting.
 bool cloudOnline();
 
+// Sets the current hardware PIN so the cloud task can initialize or compare
+void cloudSetCurrentPin(const char* pin);
+
+// Reports a keypad PIN change to Firebase Realtime Database
+void cloudReportPinChanged(const char* newPin);
+
+// Returns true if an updated PIN from the app is waiting to be saved to NVS
+bool cloudGetNewPin(char* outPin, size_t maxLen);
+
 #endif // CLOUD_H

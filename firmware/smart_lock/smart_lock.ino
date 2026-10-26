@@ -310,6 +310,7 @@ void loadPIN() {
 
   correctPIN = (storedPIN.length() >= MIN_PIN_LENGTH) ? storedPIN : DEFAULT_PIN;
   Serial.println("[NVS] PIN loaded (" + String(correctPIN.length()) + " digits)");
+  cloudSetCurrentPin(correctPIN.c_str());
 }
 
 void savePIN(String pin) {
@@ -536,6 +537,7 @@ void finishPINChange() {
   if (newPIN == confirmPIN) {
     Serial.println("[PIN] PINs match - saving");
     savePIN(newPIN);
+    cloudReportPinChanged(newPIN.c_str());
     playSuccess();
     pinState   = PIN_NORMAL;
     enteredPIN = "";
@@ -762,6 +764,14 @@ void handleCloud() {
 
   CloudCommand cmd;
   if (cloudNextCommand(cmd)) handleRemoteCommand(cmd);
+
+  char incomingPin[16];
+  if (cloudGetNewPin(incomingPin, sizeof(incomingPin))) {
+    Serial.println(String("[CLOUD] New PIN received from app: ") + incomingPin);
+    savePIN(incomingPin);
+    showTimed("PIN UPDATED", "From App", TIMED_MSG_LONG);
+    playSuccess();
+  }
 }
 
 // ===================== KEYPAD HANDLER =====================

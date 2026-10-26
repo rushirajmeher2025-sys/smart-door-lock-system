@@ -5,6 +5,7 @@ import '../models/access_request.dart';
 import '../models/lock_state.dart';
 import '../repositories/lock_repository.dart';
 import '../services/auth_service.dart';
+import '../services/biometric_service.dart';
 import '../services/firebase_init.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -28,17 +29,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late DoorLockState _lockState = _repository.currentState;
   StreamSubscription<DoorLockState>? _stateSub;
   StreamSubscription<List<AccessRequest>>? _requestsSub;
+  StreamSubscription<String?>? _pinSub;
   List<AccessRequest> _pendingRequests = [];
+  String? _currentPin;
+  bool _pinRevealed = false;
+  Timer? _pinHideTimer;
 
   @override
   void initState() {
     super.initState();
     _pendingRequests = _repository.currentPendingRequests;
+    _currentPin = _repository.currentPin;
     _stateSub = _repository.stateStream.listen((s) {
       if (mounted) setState(() => _lockState = s);
     });
     _requestsSub = _repository.pendingRequestsStream.listen((reqs) {
       if (mounted) setState(() => _pendingRequests = reqs);
+    });
+    _pinSub = _repository.pinStream.listen((pin) {
+      if (mounted) setState(() => _currentPin = pin);
     });
   }
 
@@ -46,6 +55,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _stateSub?.cancel();
     _requestsSub?.cancel();
+    _pinSub?.cancel();
+    _pinHideTimer?.cancel();
     super.dispose();
   }
 
@@ -56,6 +67,206 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _copy(String text, String what) {
     Clipboard.setData(ClipboardData(text: text));
     _toast('$what copied');
+  }
+
+  Future<void> _togglePinVisibility() async {
+    if (_pinRevealed) {
+      _pinHideTimer?.cancel();
+      setState(() => _pinRevealed = false);
+      return;
+    }
+    final ok = await BiometricService.instance.authenticateWithFallback(
+      context: context,
+      reason: 'Authenticate using fingerprint, face scan, or password to view the keypad PIN',
+    );
+    if (ok && mounted) {
+      setState(() => _pinRevealed = true);
+      _pinHideTimer?.cancel();
+      _pinHideTimer = Timer(const Duration(seconds: 30), () {
+        if (mounted) setState(() => _pinRevealed = false);
+      });
+    }
+  }
+
+  Future<void> _showChangePinDialog() async {
+    final oldPinController = TextEditingController();
+    final newPinController = TextEditingController();
+    final confirmPinController = TextEditingController();
+    bool obscureOld = true;
+    bool obscureNew = true;
+    bool obscureConfirm = true;
+    bool oldVerifiedBiometrically = false;
+    String? errorText;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.dialpad_rounded, color: AppColors.brand, size: 24),
+              SizedBox(width: 10),
+              Text('Change Keypad PIN'),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Change the door PIN directly from the app. It will synchronize with the physical lock.',
+                  style: TextStyle(fontSize: 13, height: 1.4, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 16),
+                if (!oldVerifiedBiometrically) ...[
+                  TextField(
+                    controller: oldPinController,
+                    obscureText: obscureOld,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(8)],
+                    decoration: InputDecoration(
+                      labelText: 'Current PIN',
+                      prefixIcon: const Icon(Icons.password_rounded),
+                      suffixIcon: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.fingerprint_rounded, size: 20),
+                            tooltip: 'Verify with biometrics',
+                            onPressed: () async {
+                              final ok = await BiometricService.instance.authenticateWithFallback(
+                                context: context,
+                                reason: 'Authenticate to verify old PIN',
+                              );
+                              if (ok) {
+                                setDlgState(() {
+                                  oldVerifiedBiometrically = true;
+                                  errorText = null;
+                                });
+                              }
+                            },
+                          ),
+                          IconButton(
+                            icon: Icon(obscureOld ? Icons.visibility_outlined : Icons.visibility_off_outlined, size: 20),
+                            onPressed: () => setDlgState(() => obscureOld = !obscureOld),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ] else ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.brand.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.brand.withValues(alpha: 0.3)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.check_circle_rounded, color: AppColors.brand, size: 18),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text('Current identity verified via biometrics',
+                              style: TextStyle(fontSize: 12.5, color: AppColors.brand, fontWeight: FontWeight.w500)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                TextField(
+                  controller: newPinController,
+                  obscureText: obscureNew,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(8)],
+                  decoration: InputDecoration(
+                    labelText: 'New PIN (4–8 digits)',
+                    prefixIcon: const Icon(Icons.pin_rounded),
+                    suffixIcon: IconButton(
+                      icon: Icon(obscureNew ? Icons.visibility_outlined : Icons.visibility_off_outlined, size: 20),
+                      onPressed: () => setDlgState(() => obscureNew = !obscureNew),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: confirmPinController,
+                  obscureText: obscureConfirm,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(8)],
+                  decoration: InputDecoration(
+                    labelText: 'Confirm New PIN',
+                    prefixIcon: const Icon(Icons.check_rounded),
+                    suffixIcon: IconButton(
+                      icon: Icon(obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined, size: 20),
+                      onPressed: () => setDlgState(() => obscureConfirm = !obscureConfirm),
+                    ),
+                  ),
+                ),
+                if (errorText != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    errorText!,
+                    style: const TextStyle(color: AppColors.alarm, fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final oldPin = oldPinController.text.trim();
+                final newPin = newPinController.text.trim();
+                final confirmPin = confirmPinController.text.trim();
+
+                if (!oldVerifiedBiometrically) {
+                  if (oldPin.isEmpty) {
+                    setDlgState(() => errorText = 'Enter current PIN or verify with fingerprint');
+                    return;
+                  }
+                  if (_currentPin != null && _currentPin!.isNotEmpty && oldPin != _currentPin) {
+                    setDlgState(() => errorText = 'Wrong current PIN (PIN unchanged)');
+                    return;
+                  }
+                }
+
+                if (newPin.length < 4 || newPin.length > 8) {
+                  setDlgState(() => errorText = 'New PIN must be 4 to 8 digits');
+                  return;
+                }
+
+                if (newPin != confirmPin) {
+                  setDlgState(() => errorText = 'PINs do not match');
+                  return;
+                }
+
+                try {
+                  await _repository.updatePin(newPin);
+                  if (ctx.mounted) Navigator.of(ctx).pop();
+                  _toast('PIN updated successfully');
+                  setState(() {
+                    _currentPin = newPin;
+                    _pinRevealed = true;
+                  });
+                } catch (e) {
+                  setDlgState(() => errorText = 'Failed to update PIN: $e');
+                }
+              },
+              child: const Text('Save PIN'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _askForUid({
@@ -339,11 +550,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 28),
                   Reveal(
                     delay: const Duration(milliseconds: 140),
+                    child: SettingsGroup(
+                      title: 'Keypad & PIN security',
+                      footer: 'Protected by fingerprint, face scan, or password. Keep your PIN confidential.',
+                      children: [
+                        ListTile(
+                          leading: const Icon(Icons.dialpad_rounded, color: AppColors.brand),
+                          title: const Text('Keypad PIN'),
+                          subtitle: Text(
+                            _pinRevealed
+                                ? (_currentPin ?? '1234')
+                                : '••••  (tap eye icon to authenticate & view)',
+                            style: _pinRevealed
+                                ? AppTheme.mono(fontSize: 16, color: AppColors.textPrimary)
+                                : const TextStyle(color: AppColors.textSecondary),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: _pinRevealed ? 'Hide PIN' : 'View PIN (requires authentication)',
+                                icon: Icon(
+                                  _pinRevealed ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                                  color: _pinRevealed ? AppColors.brand : AppColors.textSecondary,
+                                ),
+                                onPressed: _togglePinVisibility,
+                              ),
+                              if (_pinRevealed)
+                                IconButton(
+                                  tooltip: 'Copy PIN',
+                                  icon: const Icon(Icons.copy_rounded, size: 18),
+                                  onPressed: () => _copy(_currentPin ?? '1234', 'PIN'),
+                                ),
+                              FilledButton.tonal(
+                                style: FilledButton.styleFrom(
+                                  visualDensity: VisualDensity.compact,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                ),
+                                onPressed: _showChangePinDialog,
+                                child: const Text('Change', style: TextStyle(fontSize: 12.5)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  Reveal(
+                    delay: const Duration(milliseconds: 160),
                     child: const SettingsGroup(
                       title: 'Lock behavior',
-                      footer: 'Set in the firmware (config.h). The keypad PIN never leaves the lock.',
+                      footer: 'Configured in lock firmware (config.h).',
                       children: [
-                        _InfoRow(icon: Icons.pin_outlined, title: 'Keypad PIN', subtitle: '${AppConstants.minPinLength} to ${AppConstants.maxPinLength} digits, change with C', value: 'On lock'),
                         _InfoRow(icon: Icons.timer_outlined, title: 'Auto-lock', subtitle: 'After the door closes', value: '${AppConstants.autoLockDelaySeconds} s', mono: true),
                         _InfoRow(icon: Icons.lock_clock_outlined, title: 'PIN lockout', subtitle: 'After ${AppConstants.maxPinAttempts} wrong entries', value: '${AppConstants.lockoutTimeSeconds} s', mono: true),
                         _InfoRow(icon: Icons.sensor_door_outlined, title: 'Door left open', subtitle: 'Gentle beeps', value: '${AppConstants.doorWarningSeconds} s', mono: true),

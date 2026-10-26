@@ -31,9 +31,13 @@ struct CloudResult {
   char         reason[24];
 };
 
-static QueueHandle_t eventQueue  = nullptr;   // main -> cloud
-static QueueHandle_t cmdQueue    = nullptr;   // cloud -> main
-static QueueHandle_t resultQueue = nullptr;   // main -> cloud
+static QueueHandle_t eventQueue     = nullptr;   // main -> cloud
+static QueueHandle_t cmdQueue       = nullptr;   // cloud -> main
+static QueueHandle_t resultQueue    = nullptr;   // main -> cloud
+static QueueHandle_t pinChangeQueue = nullptr;   // main -> cloud
+static QueueHandle_t newPinQueue    = nullptr;   // cloud -> main
+static char           hardwarePin[16] = DEFAULT_PIN;
+static uint32_t       lastPinCheck   = 0;
 
 static portMUX_TYPE  stateMux   = portMUX_INITIALIZER_UNLOCKED;
 static CloudState    sharedState;
@@ -486,6 +490,69 @@ static void goOffline() {
   }
 }
 
+static void syncPinCloud() {
+  // 1. If keypad changed the PIN locally, report it to RTDB
+  char changedPin[16];
+  if (pinChangeQueue && xQueueReceive(pinChangeQueue, changedPin, 0) == pdTRUE) {
+    JsonDocument doc;
+    doc["currentPin"] = changedPin;
+    doc["updatedAt"][".sv"] = "timestamp";
+    doc["updatedBy"] = "keypad";
+    String body;
+    serializeJson(doc, body);
+    int code = dbRequest("PATCH", "/devices/" DEVICE_ID "/pin", body);
+    if (code == 200) {
+      Serial.println("[CLOUD] Keypad PIN change synced to cloud");
+    }
+  }
+
+  // 2. Periodically check if cloud has an updated PIN from the app
+  if (millis() - lastPinCheck >= 15000) {
+    lastPinCheck = millis();
+    String payload;
+    int code = dbRequest("GET", "/devices/" DEVICE_ID "/pin/currentPin", "", &payload);
+    if (code == 200) {
+      if (payload == "null") {
+        char cur[16];
+        portENTER_CRITICAL(&stateMux);
+        strlcpy(cur, hardwarePin, sizeof(cur));
+        portEXIT_CRITICAL(&stateMux);
+
+        JsonDocument doc;
+        doc["currentPin"] = cur;
+        doc["updatedAt"][".sv"] = "timestamp";
+        doc["updatedBy"] = "device";
+        String body;
+        serializeJson(doc, body);
+        dbRequest("PATCH", "/devices/" DEVICE_ID "/pin", body);
+        Serial.println("[CLOUD] Initialized PIN on cloud");
+      } else {
+        String cloudPin = payload;
+        cloudPin.replace("\"", "");
+        cloudPin.trim();
+
+        char cur[16];
+        portENTER_CRITICAL(&stateMux);
+        strlcpy(cur, hardwarePin, sizeof(cur));
+        portEXIT_CRITICAL(&stateMux);
+
+        if (cloudPin.length() >= MIN_PIN_LENGTH && cloudPin.length() <= MAX_PIN_LENGTH && cloudPin != cur) {
+          Serial.println("[CLOUD] New PIN received from app");
+          portENTER_CRITICAL(&stateMux);
+          strlcpy(hardwarePin, cloudPin.c_str(), sizeof(hardwarePin));
+          portEXIT_CRITICAL(&stateMux);
+
+          char pinBuf[16];
+          strlcpy(pinBuf, cloudPin.c_str(), sizeof(pinBuf));
+          if (newPinQueue) {
+            xQueueSend(newPinQueue, pinBuf, 0);
+          }
+        }
+      }
+    }
+  }
+}
+
 // ======================== TASK ========================
 
 static void cloudTask(void*) {
@@ -561,6 +628,7 @@ static void cloudTask(void*) {
 
     sendResults();
     sendEvents();
+    syncPinCloud();
 
     // Commands need real time to check their age, so wait until we have a clock
     if (nowEpochMs() > 0 && millis() - lastPoll >= COMMAND_POLL_MS) {
@@ -575,9 +643,11 @@ static void cloudTask(void*) {
 // ======================== PUBLIC API ========================
 
 void cloudBegin() {
-  eventQueue  = xQueueCreate(16, sizeof(CloudEvent));
-  cmdQueue    = xQueueCreate(4, sizeof(CloudCommand));
-  resultQueue = xQueueCreate(4, sizeof(CloudResult));
+  eventQueue     = xQueueCreate(16, sizeof(CloudEvent));
+  cmdQueue       = xQueueCreate(4, sizeof(CloudCommand));
+  resultQueue    = xQueueCreate(4, sizeof(CloudResult));
+  pinChangeQueue = xQueueCreate(2, 16);
+  newPinQueue    = xQueueCreate(2, 16);
   memset(handledIds, 0, sizeof(handledIds));
   xTaskCreatePinnedToCore(cloudTask, "cloud", 16384, nullptr, 1, nullptr, CLOUD_TASK_CORE);
   Serial.println("[CLOUD] Cloud link starting (device " DEVICE_ID ")");
@@ -612,6 +682,34 @@ void cloudCommandDone(const CloudCommand& cmd, bool executed, const char* reason
 
 bool cloudOnline() { return online; }
 
+void cloudSetCurrentPin(const char* pin) {
+  if (!pin) return;
+  portENTER_CRITICAL(&stateMux);
+  strlcpy(hardwarePin, pin, sizeof(hardwarePin));
+  portEXIT_CRITICAL(&stateMux);
+}
+
+void cloudReportPinChanged(const char* newPin) {
+  if (!newPin || !pinChangeQueue) return;
+  portENTER_CRITICAL(&stateMux);
+  strlcpy(hardwarePin, newPin, sizeof(hardwarePin));
+  portEXIT_CRITICAL(&stateMux);
+
+  char buf[16];
+  strlcpy(buf, newPin, sizeof(buf));
+  xQueueSend(pinChangeQueue, buf, 0);
+}
+
+bool cloudGetNewPin(char* outPin, size_t maxLen) {
+  if (!newPinQueue || !outPin || maxLen == 0) return false;
+  char buf[16];
+  if (xQueueReceive(newPinQueue, buf, 0) == pdTRUE) {
+    strlcpy(outPin, buf, maxLen);
+    return true;
+  }
+  return false;
+}
+
 #else  // ------------------- cloud disabled -------------------
 
 void cloudBegin() {
@@ -626,5 +724,8 @@ void cloudLogEvent(const char*, const char*) {}
 bool cloudNextCommand(CloudCommand&) { return false; }
 void cloudCommandDone(const CloudCommand&, bool, const char*) {}
 bool cloudOnline() { return false; }
+void cloudSetCurrentPin(const char*) {}
+void cloudReportPinChanged(const char*) {}
+bool cloudGetNewPin(char*, size_t) { return false; }
 
 #endif
