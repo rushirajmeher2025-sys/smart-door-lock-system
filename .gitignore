@@ -17,6 +17,10 @@ $RECYCLE.BIN/
 **/.flutter-plugins
 **/.flutter-plugins-dependencies
 
+# Vercel & temporary build artifacts
+_flutter/
+.vercel/
+
 # Local configs and secrets
 *.local
 
