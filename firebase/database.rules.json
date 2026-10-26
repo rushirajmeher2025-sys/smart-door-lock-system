@@ -2,11 +2,11 @@
   "rules": {
     "devices": {
       "$deviceId": {
-        // Device authorization helper: user is owner, listed in authorizedUsers, or is the device itself
-        ".read": "auth != null && (data.child('metadata/ownerUid').val() === auth.uid || data.child('metadata/authorizedUsers/' + auth.uid).exists() || data.child('metadata/deviceUid').val() === auth.uid || auth.token.isDevice === true || auth.token.admin === true)",
+        // Auto-access: Any authenticated user with the app/APK can read device state
+        ".read": "auth != null",
 
         "status": {
-          // Only the physical ESP32 device or admin can update status
+          // Only the physical ESP32 device or owner can update status
           ".write": "auth != null && (auth.token.isDevice === true || root.child('devices/' + $deviceId + '/metadata/deviceUid').val() === auth.uid || root.child('devices/' + $deviceId + '/metadata/ownerUid').val() === auth.uid)",
           ".validate": "newData.hasChildren(['isLocked', 'doorClosed', 'lastUpdated'])",
           "isLocked": { ".validate": "newData.isBoolean()" },
@@ -22,10 +22,10 @@
 
         "commands": {
           "$commandId": {
-            // Authorized users can create new PENDING commands
-            // Only device can update command status to EXECUTED / REJECTED
+            // Any authenticated app user can create a PENDING lock/unlock command
+            // Only the physical ESP32 device or owner can update status to EXECUTED / REJECTED
             ".write": "auth != null && (
-              (!data.exists() && newData.exists() && newData.child('requestedBy').val() === auth.uid && newData.child('status').val() === 'PENDING' && (root.child('devices/' + $deviceId + '/metadata/authorizedUsers/' + auth.uid).exists() || root.child('devices/' + $deviceId + '/metadata/ownerUid').val() === auth.uid))
+              (!data.exists() && newData.exists() && newData.child('requestedBy').val() === auth.uid && newData.child('status').val() === 'PENDING')
               || (data.exists() && (auth.token.isDevice === true || root.child('devices/' + $deviceId + '/metadata/deviceUid').val() === auth.uid || root.child('devices/' + $deviceId + '/metadata/ownerUid').val() === auth.uid))
             )",
             ".validate": "newData.hasChildren(['action', 'commandId', 'requestedAt', 'requestedBy', 'status'])",
