@@ -22,10 +22,10 @@
 
         "commands": {
           "$commandId": {
-            // Any authenticated app user can create a PENDING lock/unlock command
-            // Only the physical ESP32 device or owner can update status to EXECUTED / REJECTED
+            // Only the owner or approved users in authorizedUsers can create PENDING commands
+            // Only device or owner can update status to EXECUTED / REJECTED
             ".write": "auth != null && (
-              (!data.exists() && newData.exists() && newData.child('requestedBy').val() === auth.uid && newData.child('status').val() === 'PENDING')
+              (!data.exists() && newData.exists() && newData.child('requestedBy').val() === auth.uid && newData.child('status').val() === 'PENDING' && (root.child('devices/' + $deviceId + '/metadata/authorizedUsers/' + auth.uid).val() === true || root.child('devices/' + $deviceId + '/metadata/ownerUid').val() === auth.uid))
               || (data.exists() && (auth.token.isDevice === true || root.child('devices/' + $deviceId + '/metadata/deviceUid').val() === auth.uid || root.child('devices/' + $deviceId + '/metadata/ownerUid').val() === auth.uid))
             )",
             ".validate": "newData.hasChildren(['action', 'commandId', 'requestedAt', 'requestedBy', 'status'])",
@@ -36,6 +36,20 @@
             "status": { ".validate": "newData.val() === 'PENDING' || newData.val() === 'PROCESSING' || newData.val() === 'EXECUTED' || newData.val() === 'REJECTED' || newData.val() === 'FAILED'" },
             "executedAt": { ".validate": "newData.isNumber() || newData.val() == null" },
             "failureReason": { ".validate": "newData.isString() || newData.val() == null" }
+          }
+        },
+
+        "requests": {
+          // Access requests from new users awaiting owner approval
+          ".read": "auth != null",
+          "$uid": {
+            // User can submit/cancel their own request; owner can approve or decline
+            ".write": "auth != null && (auth.uid === $uid || root.child('devices/' + $deviceId + '/metadata/ownerUid').val() === auth.uid)",
+            ".validate": "newData.hasChildren(['uid', 'email', 'requestedAt', 'status'])",
+            "uid": { ".validate": "newData.val() === $uid" },
+            "email": { ".validate": "newData.isString()" },
+            "requestedAt": { ".validate": "newData.isNumber()" },
+            "status": { ".validate": "newData.val() === 'PENDING' || newData.val() === 'APPROVED' || newData.val() === 'REJECTED'" }
           }
         },
 

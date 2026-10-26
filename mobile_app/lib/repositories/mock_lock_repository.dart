@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../models/access_request.dart';
 import '../models/lock_state.dart';
 import '../models/remote_command.dart';
 import '../models/security_event.dart';
@@ -185,6 +186,47 @@ class MockLockRepository implements LockRepository {
     allowed ? members[uid] = true : members.remove(uid);
     final a = _access.value;
     _access.value = LockAccess(a.status, uid: a.uid, deviceUid: a.deviceUid, members: members);
+  }
+
+  final _pendingRequestsController = StreamController<List<AccessRequest>>.broadcast();
+  List<AccessRequest> _pendingRequests = [];
+
+  @override
+  Stream<List<AccessRequest>> get pendingRequestsStream => _pendingRequestsController.stream;
+
+  @override
+  List<AccessRequest> get currentPendingRequests => List.unmodifiable(_pendingRequests);
+
+  @override
+  Future<void> requestAccess({required String email}) async {
+    final req = AccessRequest(
+      uid: 'requested-user-1',
+      email: email,
+      requestedAt: DateTime.now(),
+      status: 'PENDING',
+    );
+    _pendingRequests = [..._pendingRequests, req];
+    _pendingRequestsController.add(_pendingRequests);
+    _access.value = LockAccess(
+      AccessStatus.denied,
+      uid: 'demo-user',
+      deviceUid: _access.value.deviceUid,
+      myRequest: req,
+    );
+  }
+
+  @override
+  Future<void> approveRequest(String uid) async {
+    _pendingRequests = _pendingRequests.where((r) => r.uid != uid).toList();
+    _pendingRequestsController.add(_pendingRequests);
+    await setMember(uid, true);
+  }
+
+  @override
+  Future<void> rejectRequest(String uid) async {
+    _pendingRequests = _pendingRequests.where((r) => r.uid != uid).toList();
+    _pendingRequestsController.add(_pendingRequests);
+    await setMember(uid, false);
   }
 
   @override

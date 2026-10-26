@@ -297,8 +297,8 @@ static int refreshAccess() {
 
 static bool isAllowedUser(const char* uid) {
   if (!uid || !*uid) return false;
-  // Auto-access: Any authenticated user from the LocKify app/APK is allowed to control the lock
-  return true;
+  if (ownerUid == uid) return true;
+  return authorizedUsers[uid].is<bool>() && authorizedUsers[uid].as<bool>();
 }
 
 // ======================== STATUS / EVENTS / COMMANDS ========================

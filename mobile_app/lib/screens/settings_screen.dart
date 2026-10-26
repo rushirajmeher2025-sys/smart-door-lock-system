@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../models/access_request.dart';
 import '../models/lock_state.dart';
 import '../repositories/lock_repository.dart';
 import '../services/auth_service.dart';
@@ -8,6 +9,7 @@ import '../services/firebase_init.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/constants.dart';
+import '../utils/time_format.dart';
 import '../widgets/backdrop.dart';
 import '../widgets/brand_mark.dart';
 import '../widgets/panel.dart';
@@ -25,18 +27,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final LockRepository _repository = lockRepository();
   late DoorLockState _lockState = _repository.currentState;
   StreamSubscription<DoorLockState>? _stateSub;
+  StreamSubscription<List<AccessRequest>>? _requestsSub;
+  List<AccessRequest> _pendingRequests = [];
 
   @override
   void initState() {
     super.initState();
+    _pendingRequests = _repository.currentPendingRequests;
     _stateSub = _repository.stateStream.listen((s) {
       if (mounted) setState(() => _lockState = s);
+    });
+    _requestsSub = _repository.pendingRequestsStream.listen((reqs) {
+      if (mounted) setState(() => _pendingRequests = reqs);
     });
   }
 
   @override
   void dispose() {
     _stateSub?.cancel();
+    _requestsSub?.cancel();
     super.dispose();
   }
 
@@ -254,12 +263,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                   if (access.isOwner) ...[
+                    if (_pendingRequests.isNotEmpty) ...[
+                      const SizedBox(height: 28),
+                      Reveal(
+                        delay: const Duration(milliseconds: 90),
+                        child: SettingsGroup(
+                          title: 'Pending access requests (${_pendingRequests.length})',
+                          footer: 'Approve to grant immediate access to control the lock.',
+                          children: [
+                            for (final req in _pendingRequests)
+                              ListTile(
+                                leading: const Icon(Icons.person_add_rounded, color: AppColors.brand),
+                                title: Text(req.email, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                                subtitle: Text('UID: ${req.uid} · ${agoShort(req.requestedAt)}', style: AppTheme.mono(fontSize: 11, color: AppColors.textMuted)),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.check_circle_rounded, color: AppColors.brand, size: 24),
+                                      tooltip: 'Approve',
+                                      onPressed: () async {
+                                        await _repository.approveRequest(req.uid);
+                                        _toast('Approved access for ${req.email}');
+                                      },
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.cancel_rounded, color: AppColors.alarm, size: 24),
+                                      tooltip: 'Decline',
+                                      onPressed: () async {
+                                        await _repository.rejectRequest(req.uid);
+                                        _toast('Declined request for ${req.email}');
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 28),
                     Reveal(
                       delay: const Duration(milliseconds: 100),
                       child: SettingsGroup(
                         title: 'People with access',
-                        footer: 'They create an account in LocKify, then send you the user ID from their Settings.',
+                        footer: 'They create an account in LocKify, then request access or send you their user ID.',
                         children: [
                           for (final uid in access.members.keys)
                             ListTile(

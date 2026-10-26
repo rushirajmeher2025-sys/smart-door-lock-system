@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
+import '../models/access_request.dart';
 import '../models/lock_state.dart';
 import '../models/remote_command.dart';
 import '../models/security_event.dart';
@@ -22,11 +23,14 @@ class FirebaseLockRepository implements LockRepository {
 
   final _stateController = StreamController<DoorLockState>.broadcast();
   final _eventsController = StreamController<List<SecurityEvent>>.broadcast();
+  final _pendingRequestsController = StreamController<List<AccessRequest>>.broadcast();
   final _access = ValueNotifier<LockAccess>(const LockAccess(AccessStatus.checking));
 
   DoorLockState _report = DoorLockState.waiting();
   DoorLockState _state = DoorLockState.waiting();
   List<SecurityEvent> _events = const [];
+  List<AccessRequest> _pendingRequests = const [];
+  AccessRequest? _myRequest;
   bool _eventsLoaded = false;
   String? _eventsError;
   bool _pending = false;
@@ -37,6 +41,7 @@ class FirebaseLockRepository implements LockRepository {
   User? _user;
   StreamSubscription<User?>? _authSub;
   final List<StreamSubscription<DatabaseEvent>> _subs = [];
+  StreamSubscription<DatabaseEvent>? _requestsSub;
   Timer? _ticker;
 
   @override
@@ -45,6 +50,10 @@ class FirebaseLockRepository implements LockRepository {
   Stream<DoorLockState> get stateStream => _stateController.stream;
   @override
   Stream<List<SecurityEvent>> get eventsStream => _eventsController.stream;
+  @override
+  Stream<List<AccessRequest>> get pendingRequestsStream => _pendingRequestsController.stream;
+  @override
+  List<AccessRequest> get currentPendingRequests => _pendingRequests;
   @override
   DoorLockState get currentState => _state;
   @override
@@ -105,6 +114,24 @@ class FirebaseLockRepository implements LockRepository {
     _subs.add(_db.ref('.info/serverTimeOffset').onValue.listen((e) {
       final v = e.snapshot.value;
       if (v is num) _serverOffsetMs = v.toInt();
+    }));
+
+    _subs.add(_device.child('requests/${user.uid}').onValue.listen((e) {
+      final v = e.snapshot.value;
+      if (v is Map) {
+        _myRequest = AccessRequest.fromJson(Map<String, dynamic>.from(v), uid: user.uid);
+      } else {
+        _myRequest = null;
+      }
+      final cur = _access.value;
+      _access.value = LockAccess(
+        cur.status,
+        uid: cur.uid,
+        deviceUid: cur.deviceUid,
+        members: cur.members,
+        message: cur.message,
+        myRequest: _myRequest,
+      );
     }));
 
     _subs.add(_device.child('metadata').onValue.listen(
@@ -197,12 +224,41 @@ class FirebaseLockRepository implements LockRepository {
         if (v == true) members[k.toString()] = true;
       });
     }
+
+    final isOwner = owner == uid;
+    final isApproved = members[uid] == true;
+    final status = isOwner
+        ? AccessStatus.owner
+        : (isApproved ? AccessStatus.member : AccessStatus.denied);
+
     _access.value = LockAccess(
-      owner == uid ? AccessStatus.owner : AccessStatus.member,
+      status,
       uid: uid,
       deviceUid: value['deviceUid'] as String?,
       members: members,
+      myRequest: _myRequest,
     );
+
+    // If owner, listen for access requests from other users
+    if (isOwner && _requestsSub == null) {
+      _requestsSub = _device.child('requests').onValue.listen((e) {
+        final v = e.snapshot.value;
+        final list = <AccessRequest>[];
+        if (v is Map) {
+          v.forEach((k, reqVal) {
+            if (reqVal is Map) {
+              final req = AccessRequest.fromJson(Map<String, dynamic>.from(reqVal), uid: k.toString());
+              if (req.isPending) list.add(req);
+            }
+          });
+        }
+        list.sort((a, b) => b.requestedAt.compareTo(a.requestedAt));
+        _pendingRequests = List.unmodifiable(list);
+        _pendingRequestsController.add(_pendingRequests);
+      });
+      _subs.add(_requestsSub!);
+    }
+
     if (_report.syncIssue != null) {
       _report = _report.copyWith(clearSyncIssue: true);
       _emit();
@@ -310,6 +366,30 @@ class FirebaseLockRepository implements LockRepository {
   @override
   Future<void> setMember(String uid, bool allowed) async {
     await _device.child('metadata/authorizedUsers/${uid.trim()}').set(allowed ? true : null);
+  }
+
+  @override
+  Future<void> requestAccess({required String email}) async {
+    final user = _user;
+    if (user == null) return;
+    await _device.child('requests/${user.uid}').set({
+      'uid': user.uid,
+      'email': email.trim(),
+      'requestedAt': ServerValue.timestamp,
+      'status': 'PENDING',
+    });
+  }
+
+  @override
+  Future<void> approveRequest(String uid) async {
+    await _device.child('metadata/authorizedUsers/${uid.trim()}').set(true);
+    await _device.child('requests/${uid.trim()}/status').set('APPROVED');
+  }
+
+  @override
+  Future<void> rejectRequest(String uid) async {
+    await _device.child('metadata/authorizedUsers/${uid.trim()}').remove();
+    await _device.child('requests/${uid.trim()}/status').set('REJECTED');
   }
 
   @override

@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../models/access_request.dart';
 import '../models/lock_state.dart';
 import '../models/remote_command.dart';
 import '../models/security_event.dart';
 import '../repositories/lock_repository.dart';
 import '../repositories/mock_lock_repository.dart';
+import '../services/auth_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/constants.dart';
@@ -32,21 +34,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late List<SecurityEvent> _recentEvents;
   StreamSubscription<DoorLockState>? _stateSub;
   StreamSubscription<List<SecurityEvent>>? _eventsSub;
+  StreamSubscription<List<AccessRequest>>? _requestsSub;
+  List<AccessRequest> _pendingRequests = [];
 
   CommandOutcome? _outcome;
   Timer? _outcomeTimer;
   int _celebrate = 0;
+  bool _submittingRequest = false;
 
   @override
   void initState() {
     super.initState();
     _lockState = _repository.currentState;
     _recentEvents = _repository.currentEvents.take(4).toList();
+    _pendingRequests = _repository.currentPendingRequests;
     _stateSub = _repository.stateStream.listen((state) {
       if (mounted) setState(() => _lockState = state);
     });
     _eventsSub = _repository.eventsStream.listen((events) {
       if (mounted) setState(() => _recentEvents = events.take(4).toList());
+    });
+    _requestsSub = _repository.pendingRequestsStream.listen((reqs) {
+      if (mounted) setState(() => _pendingRequests = reqs);
     });
   }
 
@@ -54,8 +63,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void dispose() {
     _stateSub?.cancel();
     _eventsSub?.cancel();
+    _requestsSub?.cancel();
     _outcomeTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _submitRequest() async {
+    final email = AuthService.instance.currentUser?.email ?? 'User';
+    setState(() => _submittingRequest = true);
+    try {
+      await _repository.requestAccess(email: email);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Access request sent to the owner')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to send request: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submittingRequest = false);
+    }
   }
 
   Future<void> _run(bool lock) async {
@@ -191,37 +222,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final live = confirmed && !_repository.isSimulation;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Backdrop(
-        tint: color,
-        child: SafeArea(
-          bottom: false,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 120),
-            children: [
-              Row(
+    return ValueListenableBuilder<LockAccess>(
+      valueListenable: _repository.access,
+      builder: (context, access, _) {
+        if (access.status == AccessStatus.denied) {
+          return _buildRequestAccessView(context, access);
+        }
+
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Backdrop(
+            tint: color,
+            child: SafeArea(
+              bottom: false,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 120),
                 children: [
-                  const BrandMark(size: 28),
-                  const Spacer(),
-                  if (_repository.isSimulation)
-                    const Pill(label: 'DEMO', color: AppColors.textSecondary, icon: Icons.science_outlined)
-                  else
-                    Pill(
-                      label: live ? 'LIVE' : 'OFFLINE',
-                      color: live ? AppColors.brand : AppColors.offline,
-                      pulse: live,
-                    ),
-                  if (_repository.isSimulation) ...[
-                    const SizedBox(width: 4),
-                    IconButton(
-                      tooltip: 'Simulator',
-                      icon: const Icon(Icons.tune_rounded, color: AppColors.textSecondary, size: 20),
-                      onPressed: _openSimulation,
-                    ),
+                  Row(
+                    children: [
+                      const BrandMark(size: 28),
+                      const Spacer(),
+                      if (_repository.isSimulation)
+                        const Pill(label: 'DEMO', color: AppColors.textSecondary, icon: Icons.science_outlined)
+                      else
+                        Pill(
+                          label: live ? 'LIVE' : 'OFFLINE',
+                          color: live ? AppColors.brand : AppColors.offline,
+                          pulse: live,
+                        ),
+                      if (_repository.isSimulation) ...[
+                        const SizedBox(width: 4),
+                        IconButton(
+                          tooltip: 'Simulator',
+                          icon: const Icon(Icons.tune_rounded, color: AppColors.textSecondary, size: 20),
+                          onPressed: _openSimulation,
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (access.isOwner && _pendingRequests.isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    for (final req in _pendingRequests) _buildPendingRequestCard(req),
                   ],
-                ],
-              ),
               const SizedBox(height: 26),
               Reveal(
                 child: Text(
@@ -411,6 +453,176 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
             ],
+          ),
+        ),
+      ),
+    );
+      },
+    );
+  }
+
+  Widget _buildPendingRequestCard(AccessRequest req) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceLight,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.brand.withValues(alpha: 0.5), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.person_add_rounded, color: AppColors.brand, size: 20),
+              const SizedBox(width: 8),
+              Text('ACCESS REQUEST', style: AppTheme.label(color: AppColors.brand)),
+              const Spacer(),
+              Text(agoShort(req.requestedAt), style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            req.email,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'UID: ${req.uid}',
+            style: AppTheme.mono(fontSize: 11, color: AppColors.textMuted),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: AppColors.brand),
+                  onPressed: () async {
+                    await _repository.approveRequest(req.uid);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Access approved for ${req.email}')),
+                      );
+                    }
+                  },
+                  child: const Text('Approve'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () async {
+                    await _repository.rejectRequest(req.uid);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Request declined for ${req.email}')),
+                      );
+                    }
+                  },
+                  child: const Text('Decline'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRequestAccessView(BuildContext context, LockAccess access) {
+    final pending = access.isPendingApproval;
+    final rejected = access.isRequestRejected;
+    final email = AuthService.instance.currentUser?.email ?? 'User';
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Backdrop(
+        tint: pending ? AppColors.warning : AppColors.offline,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    const BrandMark(size: 28),
+                    const Spacer(),
+                    Pill(
+                      label: pending ? 'PENDING' : (rejected ? 'DECLINED' : 'RESTRICTED'),
+                      color: pending ? AppColors.warning : (rejected ? AppColors.alarm : AppColors.offline),
+                      icon: pending ? Icons.hourglass_top_rounded : Icons.lock_outline_rounded,
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                LockOrb(
+                  locked: true,
+                  pending: _submittingRequest,
+                  dim: true,
+                  color: pending ? AppColors.warning : (rejected ? AppColors.alarm : AppColors.offline),
+                  celebrate: 0,
+                  size: 200,
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  pending
+                      ? 'Request Pending'
+                      : (rejected ? 'Access Declined' : 'Private Lock'),
+                  style: AppTheme.display(fontSize: 32, letterSpacing: -1),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  pending
+                      ? 'Your request to link to this smart lock was sent to the owner ($email).\nYou will automatically get access once accepted.'
+                      : (rejected
+                          ? 'The lock owner declined your access request. You can submit another request if this was a mistake.'
+                          : 'This smart lock is protected. You must request access and be approved by the owner to control it.'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 14.5, height: 1.5),
+                ),
+                const SizedBox(height: 32),
+                if (pending)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceLight,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.hairline),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.warning),
+                        ),
+                        SizedBox(width: 12),
+                        Text('Waiting for owner approval...', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                      ],
+                    ),
+                  )
+                else
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.brand,
+                      minimumSize: const Size.fromHeight(50),
+                    ),
+                    onPressed: _submittingRequest ? null : _submitRequest,
+                    icon: _submittingRequest
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                        : const Icon(Icons.send_rounded, size: 20),
+                    label: Text(_submittingRequest ? 'Sending Request...' : (rejected ? 'Request Access Again' : 'Request Access to Lock')),
+                  ),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => _repository.retry(),
+                  child: const Text('Refresh Status', style: TextStyle(color: AppColors.textSecondary)),
+                ),
+              ],
+            ),
           ),
         ),
       ),

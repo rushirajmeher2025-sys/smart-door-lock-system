@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../models/access_request.dart';
 import '../models/lock_state.dart';
 import '../models/remote_command.dart';
 import '../models/security_event.dart';
@@ -52,6 +53,7 @@ class LockAccess {
   final String? deviceUid;
   final Map<String, bool> members;
   final String? message;
+  final AccessRequest? myRequest;
 
   const LockAccess(
     this.status, {
@@ -59,10 +61,13 @@ class LockAccess {
     this.deviceUid,
     this.members = const {},
     this.message,
+    this.myRequest,
   });
 
   bool get isOwner => status == AccessStatus.owner || status == AccessStatus.demo;
   bool get hardwareLinked => deviceUid != null && deviceUid!.isNotEmpty;
+  bool get isPendingApproval => status == AccessStatus.denied && myRequest?.isPending == true;
+  bool get isRequestRejected => status == AccessStatus.denied && myRequest?.isRejected == true;
 }
 
 /// One lock, as the screens see it. The demo build and Firebase build share it.
@@ -81,6 +86,10 @@ abstract class LockRepository {
 
   ValueListenable<LockAccess> get access;
 
+  /// Pending requests from other users waiting for owner approval
+  Stream<List<AccessRequest>> get pendingRequestsStream;
+  List<AccessRequest> get currentPendingRequests;
+
   Future<CommandOutcome> sendCommand(RemoteAction action);
 
   /// Owner only: lets the lock's own Firebase account act for this lock.
@@ -88,6 +97,15 @@ abstract class LockRepository {
 
   /// Owner only: give or remove another account's access.
   Future<void> setMember(String uid, bool allowed);
+
+  /// Submit an access request from this account to the lock owner.
+  Future<void> requestAccess({required String email});
+
+  /// Owner only: approve a pending access request.
+  Future<void> approveRequest(String uid);
+
+  /// Owner only: reject a pending access request.
+  Future<void> rejectRequest(String uid);
 
   /// Re-reads access and status, e.g. after an error.
   Future<void> retry();
