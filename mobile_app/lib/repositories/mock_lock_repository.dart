@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/access_request.dart';
+import '../models/lock_device_info.dart';
 import '../models/lock_state.dart';
 import '../models/remote_command.dart';
 import '../models/security_event.dart';
@@ -200,17 +201,35 @@ class MockLockRepository implements LockRepository {
   @override
   Future<void> requestAccess({required String email}) async {
     final req = AccessRequest(
-      uid: 'requested-user-1',
+      uid: 'demo-user',
       email: email,
       requestedAt: DateTime.now(),
       status: 'PENDING',
     );
     _pendingRequests = [..._pendingRequests, req];
     _pendingRequestsController.add(_pendingRequests);
+
+    _availableLocks = _availableLocks.map((lock) {
+      if (lock.deviceId == _activeDeviceId) {
+        return LockDeviceInfo(
+          deviceId: lock.deviceId,
+          deviceName: lock.deviceName,
+          hardware: lock.hardware,
+          ownerUid: lock.ownerUid,
+          isOnline: lock.isOnline,
+          isLocked: lock.isLocked,
+          authorizedUsers: lock.authorizedUsers,
+          myRequestStatus: 'PENDING',
+        );
+      }
+      return lock;
+    }).toList();
+    _availableLocksController.add(_availableLocks);
+
     _access.value = LockAccess(
       AccessStatus.denied,
       uid: 'demo-user',
-      deviceUid: _access.value.deviceUid,
+      deviceUid: _activeDeviceId,
       myRequest: req,
     );
   }
@@ -219,13 +238,63 @@ class MockLockRepository implements LockRepository {
   Future<void> approveRequest(String uid) async {
     _pendingRequests = _pendingRequests.where((r) => r.uid != uid).toList();
     _pendingRequestsController.add(_pendingRequests);
-    await setMember(uid, true);
+
+    _availableLocks = _availableLocks.map((lock) {
+      if (lock.deviceId == _activeDeviceId || lock.myRequestStatus == 'PENDING') {
+        final newAuth = Map<String, bool>.from(lock.authorizedUsers);
+        newAuth[uid] = true;
+        newAuth['demo-user'] = true;
+        return LockDeviceInfo(
+          deviceId: lock.deviceId,
+          deviceName: lock.deviceName,
+          hardware: lock.hardware,
+          ownerUid: lock.ownerUid,
+          isOnline: lock.isOnline,
+          isLocked: lock.isLocked,
+          authorizedUsers: newAuth,
+          myRequestStatus: 'APPROVED',
+        );
+      }
+      return lock;
+    }).toList();
+    _availableLocksController.add(_availableLocks);
+
+    final members = Map<String, bool>.from(_access.value.members);
+    members[uid] = true;
+    members['demo-user'] = true;
+    _access.value = LockAccess(
+      AccessStatus.member,
+      uid: _access.value.uid,
+      deviceUid: _activeDeviceId,
+      members: members,
+      myRequest: null,
+    );
   }
 
   @override
   Future<void> rejectRequest(String uid) async {
     _pendingRequests = _pendingRequests.where((r) => r.uid != uid).toList();
     _pendingRequestsController.add(_pendingRequests);
+
+    _availableLocks = _availableLocks.map((lock) {
+      if (lock.deviceId == _activeDeviceId || lock.myRequestStatus == 'PENDING') {
+        final newAuth = Map<String, bool>.from(lock.authorizedUsers);
+        newAuth.remove(uid);
+        return LockDeviceInfo(
+          deviceId: lock.deviceId,
+          deviceName: lock.deviceName,
+          hardware: lock.hardware,
+          ownerUid: lock.ownerUid,
+          isOnline: lock.isOnline,
+          isLocked: lock.isLocked,
+          authorizedUsers: newAuth,
+          myRequestStatus: 'REJECTED',
+        );
+      }
+      return lock;
+    }).toList();
+    _availableLocksController.add(_availableLocks);
+
     await setMember(uid, false);
   }
 
@@ -244,6 +313,57 @@ class MockLockRepository implements LockRepository {
     _pinController.add(_pin);
     _addEvent('pin_changed', 'PIN updated', 'PIN changed from app', 'LocKify app', EventSeverity.normal);
   }
+
+  String _activeDeviceId = 'esp32_lock_01';
+  String _activeDeviceName = 'Front door';
+  final _availableLocksController = StreamController<List<LockDeviceInfo>>.broadcast();
+  List<LockDeviceInfo> _availableLocks = const [
+    LockDeviceInfo(
+      deviceId: 'esp32_lock_01',
+      deviceName: 'Front door',
+      hardware: 'ESP32 DevKit V4',
+      ownerUid: 'demo-user',
+      isOnline: true,
+      isLocked: true,
+    ),
+    LockDeviceInfo(
+      deviceId: 'esp32_lock_02',
+      deviceName: 'Back door',
+      hardware: 'ESP32 DevKit V4',
+      ownerUid: 'another-owner',
+      isOnline: true,
+      isLocked: true,
+    ),
+  ];
+
+  @override
+  String get activeDeviceId => _activeDeviceId;
+  @override
+  String get activeDeviceName => _activeDeviceName;
+
+  @override
+  Future<void> setActiveDevice(String deviceId, {String? deviceName}) async {
+    _activeDeviceId = deviceId;
+    if (deviceName != null) _activeDeviceName = deviceName;
+    if (deviceId == 'esp32_lock_01') {
+      _access.value = const LockAccess(AccessStatus.owner, uid: 'demo-user', deviceUid: 'demo-lock');
+    } else {
+      final lock = _availableLocks.firstWhere((l) => l.deviceId == deviceId, orElse: () => _availableLocks.first);
+      final isApproved = lock.authorizedUsers['demo-user'] == true || lock.myRequestStatus == 'APPROVED';
+      final isPending = lock.myRequestStatus == 'PENDING';
+      _access.value = LockAccess(
+        isApproved ? AccessStatus.member : AccessStatus.denied,
+        uid: 'demo-user',
+        deviceUid: deviceId,
+        myRequest: isPending ? AccessRequest(uid: 'demo-user', email: 'demo@lockify.local', requestedAt: DateTime.now(), status: 'PENDING') : null,
+      );
+    }
+  }
+
+  @override
+  Stream<List<LockDeviceInfo>> get availableLocksStream => _availableLocksController.stream;
+  @override
+  List<LockDeviceInfo> get availableLocks => _availableLocks;
 
   @override
   Future<void> retry() async {}

@@ -1,6 +1,8 @@
 {
   "rules": {
     "devices": {
+      // Allow authenticated users to view list of available devices
+      ".read": "auth != null",
       "$deviceId": {
         // Auto-access: Any authenticated user with the app/APK can read device state
         ".read": "auth != null",

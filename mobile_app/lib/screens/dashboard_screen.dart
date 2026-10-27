@@ -18,6 +18,7 @@ import '../widgets/event_tile.dart';
 import '../widgets/lock_orb.dart';
 import '../widgets/panel.dart';
 import '../widgets/swipe_to_confirm.dart';
+import 'lock_selection_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback? onNavigateToHistory;
@@ -241,6 +242,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Row(
                     children: [
                       const BrandMark(size: 28),
+                      const SizedBox(width: 10),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () {
+                          Navigator.of(context).pushReplacement(
+                            MaterialPageRoute(builder: (_) => const LockSelectionScreen()),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.hairline),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _repository.activeDeviceName,
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.arrow_drop_down_rounded, color: AppColors.textSecondary, size: 18),
+                            ],
+                          ),
+                        ),
+                      ),
                       const Spacer(),
                       if (_repository.isSimulation)
                         const Pill(label: 'DEMO', color: AppColors.textSecondary, icon: Icons.science_outlined)
@@ -583,7 +612,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   style: const TextStyle(color: AppColors.textSecondary, fontSize: 14.5, height: 1.5),
                 ),
                 const SizedBox(height: 32),
-                if (pending)
+                if (pending) ...[
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     decoration: BoxDecoration(
@@ -603,7 +632,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Text('Waiting for owner approval...', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
                       ],
                     ),
-                  )
+                  ),
+                  if (_repository.isSimulation) ...[
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.brand,
+                        minimumSize: const Size(220, 46),
+                      ),
+                      icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                      label: const Text('Approve Access as Owner (Demo)'),
+                      onPressed: () async {
+                        await _repository.approveRequest(AuthService.instance.currentUser?.uid ?? 'demo-user');
+                      },
+                    ),
+                  ],
+                ]
                 else
                   FilledButton.icon(
                     style: FilledButton.styleFrom(

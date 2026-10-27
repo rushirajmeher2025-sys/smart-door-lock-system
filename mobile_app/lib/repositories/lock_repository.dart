@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../models/access_request.dart';
+import '../models/lock_device_info.dart';
 import '../models/lock_state.dart';
 import '../models/remote_command.dart';
 import '../models/security_event.dart';
@@ -111,6 +112,15 @@ abstract class LockRepository {
   Stream<String?> get pinStream;
   String? get currentPin;
   Future<void> updatePin(String newPin);
+
+  /// Active device management
+  String get activeDeviceId;
+  String get activeDeviceName;
+  Future<void> setActiveDevice(String deviceId, {String? deviceName});
+
+  /// Available locks stream & list
+  Stream<List<LockDeviceInfo>> get availableLocksStream;
+  List<LockDeviceInfo> get availableLocks;
 
   /// Re-reads access and status, e.g. after an error.
   Future<void> retry();

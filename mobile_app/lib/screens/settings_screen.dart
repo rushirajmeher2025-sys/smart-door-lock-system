@@ -16,6 +16,7 @@ import '../widgets/brand_mark.dart';
 import '../widgets/panel.dart';
 import '../widgets/screen_header.dart';
 import '../widgets/settings_group.dart';
+import 'lock_selection_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -436,7 +437,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ? 'The lock prints its user ID in the Arduino Serial Monitor (115200 baud) when it starts.'
                           : null,
                       children: [
-                        _InfoRow(icon: Icons.memory_rounded, title: AppConstants.deviceName, subtitle: 'ESP32 DevKit V4', value: AppConstants.deviceId, mono: true),
+                        ListTile(
+                          leading: const Icon(Icons.swap_horiz_rounded, color: AppColors.brand),
+                          title: const Text('Switch lock'),
+                          subtitle: Text('Current: ${_repository.activeDeviceName} (${_repository.activeDeviceId})'),
+                          trailing: const Icon(Icons.chevron_right_rounded),
+                          onTap: () {
+                            Navigator.of(context).pushReplacement(
+                              MaterialPageRoute(builder: (_) => const LockSelectionScreen()),
+                            );
+                          },
+                        ),
+                        _InfoRow(icon: Icons.memory_rounded, title: _repository.activeDeviceName, subtitle: 'ESP32 DevKit V4', value: _repository.activeDeviceId, mono: true),
                         _InfoRow(
                           icon: s.isConfirmed ? Icons.wifi_rounded : Icons.wifi_off_rounded,
                           title: 'Connection',

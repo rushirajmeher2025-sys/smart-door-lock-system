@@ -8,11 +8,11 @@ import '../utils/constants.dart';
 import '../widgets/backdrop.dart';
 import '../widgets/brand_mark.dart';
 import '../widgets/panel.dart';
+import 'lock_selection_screen.dart';
 import 'login_screen.dart';
-import 'main_nav_screen.dart';
 
 /// Authentication Gate that dynamically listens to Firebase auth state changes.
-/// Redirects authenticated users to the dashboard and unauthenticated users to Login.
+/// Redirects authenticated users to the lock selection screen and unauthenticated users to Login.
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -39,7 +39,7 @@ class _AuthGateState extends State<AuthGate> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             page = const _Splash(key: ValueKey('splash'));
           } else if (snapshot.data != null) {
-            page = const MainNavScreen(key: ValueKey('home'));
+            page = const LockSelectionScreen(key: ValueKey('locks'));
           } else {
             page = const LoginScreen(key: ValueKey('login'));
           }
@@ -49,7 +49,7 @@ class _AuthGateState extends State<AuthGate> {
     }
 
     // Fallback when demo mode is enabled
-    return const LoginScreen();
+    return const LockSelectionScreen(key: ValueKey('demo_locks'));
   }
 
   Widget _buildFirebaseConfigPrompt(BuildContext context) {
@@ -174,9 +174,10 @@ class _Splash extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Backdrop(
-        child: Center(
+      backgroundColor: AppColors.background,
+      body: Center(
+        child: Panel(
+          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 36),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [

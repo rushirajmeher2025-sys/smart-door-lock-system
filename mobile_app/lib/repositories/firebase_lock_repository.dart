@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 import '../models/access_request.dart';
+import '../models/lock_device_info.dart';
 import '../models/lock_state.dart';
 import '../models/remote_command.dart';
 import '../models/security_event.dart';
@@ -19,7 +20,46 @@ class FirebaseLockRepository implements LockRepository {
   static final FirebaseLockRepository instance = FirebaseLockRepository._();
 
   FirebaseDatabase get _db => FirebaseDatabase.instance;
-  DatabaseReference get _device => _db.ref('devices/${AppConstants.deviceId}');
+  String _activeDeviceId = AppConstants.deviceId;
+  String _activeDeviceName = AppConstants.deviceName;
+
+  @override
+  String get activeDeviceId => _activeDeviceId;
+  @override
+  String get activeDeviceName => _activeDeviceName;
+
+  DatabaseReference get _device => _db.ref('devices/$_activeDeviceId');
+
+  final _availableLocksController = StreamController<List<LockDeviceInfo>>.broadcast();
+  List<LockDeviceInfo> _availableLocks = const [];
+  StreamSubscription<DatabaseEvent>? _devicesListSub;
+
+  @override
+  Stream<List<LockDeviceInfo>> get availableLocksStream => _availableLocksController.stream;
+  @override
+  List<LockDeviceInfo> get availableLocks => _availableLocks;
+
+  @override
+  Future<void> setActiveDevice(String deviceId, {String? deviceName}) async {
+    final trimmed = deviceId.trim();
+    if (trimmed.isEmpty) return;
+    if (_activeDeviceId == trimmed && _subs.isNotEmpty) {
+      if (deviceName != null) _activeDeviceName = deviceName;
+      return;
+    }
+    _activeDeviceId = trimmed;
+    if (deviceName != null) {
+      _activeDeviceName = deviceName;
+    } else {
+      final found = _availableLocks.where((d) => d.deviceId == trimmed).firstOrNull;
+      if (found != null) _activeDeviceName = found.deviceName;
+    }
+    final user = _user;
+    if (user != null) {
+      await _disconnect();
+      await _connect(user);
+    }
+  }
 
   final _stateController = StreamController<DoorLockState>.broadcast();
   final _eventsController = StreamController<List<SecurityEvent>>.broadcast();
@@ -120,6 +160,27 @@ class FirebaseLockRepository implements LockRepository {
     final ok = await _ensureAccess(user);
     if (!ok || _user?.uid != user.uid) return;
 
+    _devicesListSub?.cancel();
+    _devicesListSub = _db.ref('devices').onValue.listen((e) {
+      final v = e.snapshot.value;
+      final list = <LockDeviceInfo>[];
+      if (v is Map) {
+        v.forEach((key, val) {
+          if (val is Map) {
+            list.add(LockDeviceInfo.fromMap(key.toString(), val, currentUid: user.uid));
+          }
+        });
+      }
+      if (!list.any((d) => d.deviceId == _activeDeviceId)) {
+        list.insert(0, _buildCurrentActiveLockInfo(user.uid));
+      }
+      _availableLocks = List.unmodifiable(list);
+      _availableLocksController.add(_availableLocks);
+    }, onError: (_) {
+      _syncActiveLockDeviceInfo(user.uid);
+    });
+    _subs.add(_devicesListSub!);
+
     _subs.add(_db.ref('.info/serverTimeOffset').onValue.listen((e) {
       final v = e.snapshot.value;
       if (v is num) _serverOffsetMs = v.toInt();
@@ -133,14 +194,21 @@ class FirebaseLockRepository implements LockRepository {
         _myRequest = null;
       }
       final cur = _access.value;
+      final isOwner = cur.status == AccessStatus.owner;
+      final isApproved = cur.members[user.uid] == true || _myRequest?.isApproved == true;
+      final newStatus = isOwner
+          ? AccessStatus.owner
+          : (isApproved ? AccessStatus.member : AccessStatus.denied);
+
       _access.value = LockAccess(
-        cur.status,
+        newStatus,
         uid: cur.uid,
         deviceUid: cur.deviceUid,
         members: cur.members,
         message: cur.message,
         myRequest: _myRequest,
       );
+      _syncActiveLockDeviceInfo(user.uid);
     }));
 
     _subs.add(_device.child('pin/currentPin').onValue.listen((e) {
@@ -150,7 +218,10 @@ class FirebaseLockRepository implements LockRepository {
     }));
 
     _subs.add(_device.child('metadata').onValue.listen(
-      (e) => _applyMetadata(user.uid, e.snapshot.value),
+      (e) {
+        _applyMetadata(user.uid, e.snapshot.value);
+        _syncActiveLockDeviceInfo(user.uid, e.snapshot.value is Map ? e.snapshot.value as Map : null);
+      },
       onError: (Object e) => _setIssue(_describe(e)),
     ));
 
@@ -159,6 +230,7 @@ class FirebaseLockRepository implements LockRepository {
         final v = e.snapshot.value;
         _report = v is Map ? DoorLockState.fromJson(v) : DoorLockState.waiting();
         _emit();
+        _syncActiveLockDeviceInfo(user.uid);
       },
       onError: (Object e) => _setIssue(_describe(e)),
     ));
@@ -210,12 +282,12 @@ class FirebaseLockRepository implements LockRepository {
     // Unclaimed (or someone else's): try to claim it
     try {
       await meta.set({
-        'deviceId': AppConstants.deviceId,
-        'deviceName': AppConstants.deviceName,
+        'deviceId': _activeDeviceId,
+        'deviceName': _activeDeviceName,
         'ownerUid': user.uid,
         'hardware': 'ESP32 DevKit V4',
       });
-      await _db.ref('users/${user.uid}/devices/${AppConstants.deviceId}').set(true);
+      await _db.ref('users/${user.uid}/devices/$_activeDeviceId').set(true);
       _access.value = LockAccess(AccessStatus.owner, uid: user.uid);
       return true;
     } catch (e) {
@@ -231,6 +303,10 @@ class FirebaseLockRepository implements LockRepository {
 
   void _applyMetadata(String uid, Object? value) {
     if (value is! Map) return;
+    final devName = value['deviceName'] as String?;
+    if (devName != null && devName.isNotEmpty) {
+      _activeDeviceName = devName;
+    }
     final owner = value['ownerUid'];
     final members = <String, bool>{};
     final raw = value['authorizedUsers'];
@@ -241,7 +317,7 @@ class FirebaseLockRepository implements LockRepository {
     }
 
     final isOwner = owner == uid;
-    final isApproved = members[uid] == true;
+    final isApproved = members[uid] == true || _myRequest?.isApproved == true;
     final status = isOwner
         ? AccessStatus.owner
         : (isApproved ? AccessStatus.member : AccessStatus.denied);
@@ -278,6 +354,49 @@ class FirebaseLockRepository implements LockRepository {
       _report = _report.copyWith(clearSyncIssue: true);
       _emit();
     }
+  }
+
+  Map<dynamic, dynamic>? _lastMetadataMap;
+
+  LockDeviceInfo _buildCurrentActiveLockInfo(String uid) {
+    final meta = _lastMetadataMap ?? {};
+    final members = <String, bool>{};
+    final rawAuth = meta['authorizedUsers'];
+    if (rawAuth is Map) {
+      rawAuth.forEach((k, v) {
+        if (v == true) members[k.toString()] = true;
+      });
+    }
+
+    final isApproved = (meta['ownerUid'] == uid) || members[uid] == true || _myRequest?.isApproved == true;
+    final reqStatus = isApproved ? 'APPROVED' : (_myRequest?.status);
+
+    return LockDeviceInfo(
+      deviceId: _activeDeviceId,
+      deviceName: _activeDeviceName,
+      hardware: meta['hardware']?.toString() ?? 'ESP32 DevKit V4',
+      ownerUid: meta['ownerUid']?.toString(),
+      isOnline: _report.isOnline,
+      isLocked: _report.isLocked,
+      authorizedUsers: members,
+      myRequestStatus: reqStatus,
+    );
+  }
+
+  void _syncActiveLockDeviceInfo(String uid, [Map? metaValue]) {
+    if (metaValue != null) {
+      _lastMetadataMap = metaValue;
+    }
+    final activeLock = _buildCurrentActiveLockInfo(uid);
+    final list = List<LockDeviceInfo>.from(_availableLocks);
+    final idx = list.indexWhere((l) => l.deviceId == _activeDeviceId);
+    if (idx >= 0) {
+      list[idx] = activeLock;
+    } else {
+      list.insert(0, activeLock);
+    }
+    _availableLocks = List.unmodifiable(list);
+    _availableLocksController.add(_availableLocks);
   }
 
   void _setIssue(String message) {
@@ -393,18 +512,27 @@ class FirebaseLockRepository implements LockRepository {
       'requestedAt': ServerValue.timestamp,
       'status': 'PENDING',
     });
+    await _db.ref('users/${user.uid}/devices/$_activeDeviceId').set('PENDING');
   }
 
   @override
   Future<void> approveRequest(String uid) async {
-    await _device.child('metadata/authorizedUsers/${uid.trim()}').set(true);
-    await _device.child('requests/${uid.trim()}/status').set('APPROVED');
+    final cleaned = uid.trim();
+    await _device.child('metadata/authorizedUsers/$cleaned').set(true);
+    await _device.child('requests/$cleaned/status').set('APPROVED');
+    try {
+      await _db.ref('users/$cleaned/devices/$_activeDeviceId').set('APPROVED');
+    } catch (_) {}
   }
 
   @override
   Future<void> rejectRequest(String uid) async {
-    await _device.child('metadata/authorizedUsers/${uid.trim()}').remove();
-    await _device.child('requests/${uid.trim()}/status').set('REJECTED');
+    final cleaned = uid.trim();
+    await _device.child('metadata/authorizedUsers/$cleaned').remove();
+    await _device.child('requests/$cleaned/status').set('REJECTED');
+    try {
+      await _db.ref('users/$cleaned/devices/$_activeDeviceId').remove();
+    } catch (_) {}
   }
 
   @override

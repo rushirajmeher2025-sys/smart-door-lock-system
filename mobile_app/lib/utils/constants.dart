@@ -24,6 +24,7 @@ class AppConstants {
   // Route Names
   static const String routeGate = '/';
   static const String routeLogin = '/login';
+  static const String routeLocks = '/locks';
   static const String routeHome = '/home';
   static const String routeDashboard = '/dashboard';
   static const String routeHistory = '/history';
