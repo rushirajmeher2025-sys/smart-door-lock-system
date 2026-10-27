@@ -228,6 +228,40 @@ void drawCenteredText(String text, int y, int size) {
   u8g2.drawStr(x, baseline, text.c_str());
 }
 
+// ===================== WI-FI CORNER INDICATOR =====================
+// Always drawn in the top-right corner of the OLED display (x: 108..127, y: 1..10)
+// Connected:    Crisp Wi-Fi broadcast waves icon + cloud link bead
+// Disconnected: Slashed Wi-Fi icon + '!' warning indicator
+void drawWifiIndicator() {
+  const bool wifiOk = cloudWifiConnected();
+  const int cx = 121;
+  const int cy = 9;
+
+  if (wifiOk) {
+    // Solid base dot
+    u8g2.drawDisc(cx, cy, 1);
+    // Inner wave arc
+    u8g2.drawCircle(cx, cy, 4, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_UPPER_LEFT);
+    // Outer wave arc
+    u8g2.drawCircle(cx, cy, 7, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_UPPER_LEFT);
+
+    // If also signed in & communicating with Firebase cloud, show cloud bead
+    if (cloudOnline()) {
+      u8g2.drawPixel(cx - 9, cy - 3);
+    }
+  } else {
+    // Slashed Wi-Fi icon when disconnected
+    u8g2.drawCircle(cx, cy, 1);
+    u8g2.drawCircle(cx, cy, 6, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_UPPER_LEFT);
+    // Bold diagonal strike-through
+    u8g2.drawLine(cx - 7, cy - 8, cx + 7, cy + 1);
+    u8g2.drawLine(cx - 7, cy - 7, cx + 7, cy + 2);
+    // '!' attention mark before the slashed icon
+    u8g2.drawLine(cx - 10, cy - 7, cx - 10, cy - 3);
+    u8g2.drawPixel(cx - 10, cy - 1);
+  }
+}
+
 void showStatus(String title, String message) {
   u8g2.clearBuffer();
   if (title.length() > 10)
@@ -236,6 +270,7 @@ void showStatus(String title, String message) {
     drawCenteredText(title, 8, 2);
   u8g2.drawLine(10, 32, 117, 32);
   drawCenteredText(message, 42, 1);
+  drawWifiIndicator();
   u8g2.sendBuffer();
 }
 
@@ -250,6 +285,7 @@ void showPINEntry(String title, String pin) {
 
   drawCenteredText(masked.length() > 0 ? masked : "----", 26, 2);
   drawCenteredText("[#] OK   [*] CLEAR", 52, 1);
+  drawWifiIndicator();
   u8g2.sendBuffer();
 }
 
@@ -981,6 +1017,20 @@ void loop() {
   handleBurglarAlarm();
 
   handleCloud();   // before the keypad skip below, so app commands work during lockout too
+
+  // Auto-refresh screen when Wi-Fi state changes so the corner indicator updates immediately
+  static bool lastWifiState = false;
+  static unsigned long lastWifiCheck = 0;
+  if (millis() - lastWifiCheck >= 1000) {
+    lastWifiCheck = millis();
+    bool currentWifi = cloudWifiConnected();
+    if (currentWifi != lastWifiState) {
+      lastWifiState = currentWifi;
+      if (!timedMsgActive && pinState == PIN_NORMAL && enteredPIN.length() == 0) {
+        restoreDefaultScreen();
+      }
+    }
+  }
 
   // Keypad - skip during lockout or while a timed message is showing
   if (lockout || timedMsgActive) return;

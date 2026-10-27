@@ -51,6 +51,9 @@ void cloudCommandDone(const CloudCommand& cmd, bool executed, const char* reason
 // True while the lock is signed in to Firebase and reporting.
 bool cloudOnline();
 
+// True while the ESP32 is connected to the local Wi-Fi router.
+bool cloudWifiConnected();
+
 // Sets the current hardware PIN so the cloud task can initialize or compare
 void cloudSetCurrentPin(const char* pin);
 

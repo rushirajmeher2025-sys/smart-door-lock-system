@@ -682,6 +682,10 @@ void cloudCommandDone(const CloudCommand& cmd, bool executed, const char* reason
 
 bool cloudOnline() { return online; }
 
+bool cloudWifiConnected() {
+  return WiFi.status() == WL_CONNECTED;
+}
+
 void cloudSetCurrentPin(const char* pin) {
   if (!pin) return;
   portENTER_CRITICAL(&stateMux);
@@ -724,6 +728,7 @@ void cloudLogEvent(const char*, const char*) {}
 bool cloudNextCommand(CloudCommand&) { return false; }
 void cloudCommandDone(const CloudCommand&, bool, const char*) {}
 bool cloudOnline() { return false; }
+bool cloudWifiConnected() { return false; }
 void cloudSetCurrentPin(const char*) {}
 void cloudReportPinChanged(const char*) {}
 bool cloudGetNewPin(char*, size_t) { return false; }
