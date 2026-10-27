@@ -195,7 +195,8 @@ class FirebaseLockRepository implements LockRepository {
       }
       final cur = _access.value;
       final isOwner = cur.status == AccessStatus.owner;
-      final isApproved = cur.members[user.uid] == true || _myRequest?.isApproved == true;
+      final isApproved = cur.members[user.uid] == true ||
+          (_myRequest?.isApproved == true && (cur.members.isEmpty || cur.members[user.uid] == true));
       final newStatus = isOwner
           ? AccessStatus.owner
           : (isApproved ? AccessStatus.member : AccessStatus.denied);
@@ -222,7 +223,12 @@ class FirebaseLockRepository implements LockRepository {
         _applyMetadata(user.uid, e.snapshot.value);
         _syncActiveLockDeviceInfo(user.uid, e.snapshot.value is Map ? e.snapshot.value as Map : null);
       },
-      onError: (Object e) => _setIssue(_describe(e)),
+      onError: (Object e) {
+        if (_isPermissionDenied(e)) {
+          _access.value = LockAccess(AccessStatus.denied, uid: user.uid, message: _describe(e));
+        }
+        _setIssue(_describe(e));
+      },
     ));
 
     _subs.add(_device.child('status').onValue.listen(
@@ -232,7 +238,12 @@ class FirebaseLockRepository implements LockRepository {
         _emit();
         _syncActiveLockDeviceInfo(user.uid);
       },
-      onError: (Object e) => _setIssue(_describe(e)),
+      onError: (Object e) {
+        if (_isPermissionDenied(e)) {
+          _access.value = LockAccess(AccessStatus.denied, uid: user.uid, message: _describe(e));
+        }
+        _setIssue(_describe(e));
+      },
     ));
 
     _subs.add(_device.child('events').orderByKey().limitToLast(100).onValue.listen(
@@ -317,10 +328,10 @@ class FirebaseLockRepository implements LockRepository {
     }
 
     final isOwner = owner == uid;
-    final isApproved = members[uid] == true || _myRequest?.isApproved == true;
+    final isAuthorized = members[uid] == true;
     final status = isOwner
         ? AccessStatus.owner
-        : (isApproved ? AccessStatus.member : AccessStatus.denied);
+        : (isAuthorized ? AccessStatus.member : AccessStatus.denied);
 
     _access.value = LockAccess(
       status,
@@ -499,7 +510,20 @@ class FirebaseLockRepository implements LockRepository {
 
   @override
   Future<void> setMember(String uid, bool allowed) async {
-    await _device.child('metadata/authorizedUsers/${uid.trim()}').set(allowed ? true : null);
+    final cleaned = uid.trim();
+    if (allowed) {
+      await _device.child('metadata/authorizedUsers/$cleaned').set(true);
+      await _device.child('requests/$cleaned/status').set('APPROVED');
+      try {
+        await _db.ref('users/$cleaned/devices/$_activeDeviceId').set('APPROVED');
+      } catch (_) {}
+    } else {
+      await _device.child('metadata/authorizedUsers/$cleaned').remove();
+      await _device.child('requests/$cleaned/status').set('REVOKED');
+      try {
+        await _db.ref('users/$cleaned/devices/$_activeDeviceId').remove();
+      } catch (_) {}
+    }
   }
 
   @override

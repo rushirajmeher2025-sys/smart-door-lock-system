@@ -51,7 +51,7 @@
             "uid": { ".validate": "newData.val() === $uid" },
             "email": { ".validate": "newData.isString()" },
             "requestedAt": { ".validate": "newData.isNumber()" },
-            "status": { ".validate": "newData.val() === 'PENDING' || newData.val() === 'APPROVED' || newData.val() === 'REJECTED'" }
+            "status": { ".validate": "newData.val() === 'PENDING' || newData.val() === 'APPROVED' || newData.val() === 'REJECTED' || newData.val() === 'REVOKED'" }
           }
         },
 

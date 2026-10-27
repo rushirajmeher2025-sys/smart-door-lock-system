@@ -186,7 +186,30 @@ class MockLockRepository implements LockRepository {
     final members = Map<String, bool>.from(_access.value.members);
     allowed ? members[uid] = true : members.remove(uid);
     final a = _access.value;
-    _access.value = LockAccess(a.status, uid: a.uid, deviceUid: a.deviceUid, members: members);
+    final isOwner = a.status == AccessStatus.owner || a.status == AccessStatus.demo;
+    final newStatus = isOwner
+        ? a.status
+        : (allowed ? AccessStatus.member : AccessStatus.denied);
+    _access.value = LockAccess(newStatus, uid: a.uid, deviceUid: a.deviceUid, members: members);
+
+    _availableLocks = _availableLocks.map((lock) {
+      if (lock.deviceId == _activeDeviceId) {
+        final auth = Map<String, bool>.from(lock.authorizedUsers);
+        allowed ? auth[uid] = true : auth.remove(uid);
+        return LockDeviceInfo(
+          deviceId: lock.deviceId,
+          deviceName: lock.deviceName,
+          hardware: lock.hardware,
+          ownerUid: lock.ownerUid,
+          isOnline: lock.isOnline,
+          isLocked: lock.isLocked,
+          authorizedUsers: auth,
+          myRequestStatus: allowed ? 'APPROVED' : 'REVOKED',
+        );
+      }
+      return lock;
+    }).toList();
+    _availableLocksController.add(_availableLocks);
   }
 
   final _pendingRequestsController = StreamController<List<AccessRequest>>.broadcast();

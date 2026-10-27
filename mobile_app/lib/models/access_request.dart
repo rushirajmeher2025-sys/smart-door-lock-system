@@ -14,7 +14,8 @@ class AccessRequest {
 
   bool get isPending => status == 'PENDING';
   bool get isApproved => status == 'APPROVED';
-  bool get isRejected => status == 'REJECTED';
+  bool get isRejected => status == 'REJECTED' || status == 'REVOKED';
+  bool get isRevoked => status == 'REVOKED';
 
   factory AccessRequest.fromJson(Map<String, dynamic> json, {required String uid}) {
     DateTime parseTime(Object? v) {

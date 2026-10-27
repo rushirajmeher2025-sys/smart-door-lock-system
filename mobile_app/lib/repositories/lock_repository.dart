@@ -66,6 +66,8 @@ class LockAccess {
   });
 
   bool get isOwner => status == AccessStatus.owner || status == AccessStatus.demo;
+  bool get isMember => status == AccessStatus.member;
+  bool get isAllowed => isOwner || isMember;
   bool get hardwareLinked => deviceUid != null && deviceUid!.isNotEmpty;
   bool get isPendingApproval => status == AccessStatus.denied && myRequest?.isPending == true;
   bool get isRequestRejected => status == AccessStatus.denied && myRequest?.isRejected == true;

@@ -23,7 +23,8 @@ class _LockSelectionScreenState extends State<LockSelectionScreen> {
   StreamSubscription<List<LockDeviceInfo>>? _locksSub;
   List<LockDeviceInfo> _locks = [];
   bool _loading = false;
-
+  bool _navigating = false;
+  String? _pendingApprovalDeviceId;
   VoidCallback? _accessListener;
 
   @override
@@ -34,10 +35,13 @@ class _LockSelectionScreenState extends State<LockSelectionScreen> {
       if (!mounted) return;
       final user = AuthService.instance.currentUser;
       for (final newLock in list) {
-        final oldLock = _locks.where((l) => l.deviceId == newLock.deviceId).firstOrNull;
-        if (oldLock != null && oldLock.isPending(user?.uid) && newLock.isMember(user?.uid)) {
-          _toast('Access to "${newLock.deviceName}" approved by owner! Taking you to the lock...');
-          _selectLock(newLock);
+        final isApprovedNow = newLock.isMember(user?.uid);
+        final wasPending = _pendingApprovalDeviceId == newLock.deviceId ||
+            _locks.any((l) => l.deviceId == newLock.deviceId && l.isPending(user?.uid));
+        if (isApprovedNow && wasPending) {
+          _pendingApprovalDeviceId = null;
+          _toast('Access to "${newLock.deviceName}" approved by owner! Opening lock...');
+          _openLock(newLock);
           return;
         }
       }
@@ -48,7 +52,8 @@ class _LockSelectionScreenState extends State<LockSelectionScreen> {
       if (!mounted) return;
       final access = _repository.access.value;
       final user = AuthService.instance.currentUser;
-      if (access.status == AccessStatus.member || (user?.uid != null && access.members[user!.uid] == true)) {
+      final isMember = access.status == AccessStatus.member || (user?.uid != null && access.members[user!.uid] == true);
+      if (isMember) {
         final lock = _locks.firstWhere(
           (l) => l.deviceId == _repository.activeDeviceId,
           orElse: () => _locks.isNotEmpty
@@ -59,7 +64,7 @@ class _LockSelectionScreenState extends State<LockSelectionScreen> {
                 ),
         );
         _toast('Access approved by owner! Opening "${lock.deviceName}"...');
-        _selectLock(lock);
+        _openLock(lock);
       } else {
         setState(() {});
       }
@@ -80,6 +85,20 @@ class _LockSelectionScreenState extends State<LockSelectionScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _openLock(LockDeviceInfo lock) async {
+    if (_navigating || !mounted) return;
+    _navigating = true;
+    setState(() => _loading = true);
+    await _repository.setActiveDevice(lock.deviceId, deviceName: lock.deviceName);
+    if (mounted) {
+      // Dismiss any open modals or dialogs first
+      Navigator.of(context, rootNavigator: true).popUntil((route) => route.isFirst);
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainNavScreen()),
+      );
+    }
+  }
+
   Future<void> _selectLock(LockDeviceInfo lock) async {
     final user = AuthService.instance.currentUser;
     final access = _repository.access.value;
@@ -88,54 +107,68 @@ class _LockSelectionScreenState extends State<LockSelectionScreen> {
         (user?.uid != null && (lock.authorizedUsers[user!.uid] == true || access.members[user.uid] == true || access.status == AccessStatus.member));
 
     if (isOwner || isMember) {
-      setState(() => _loading = true);
-      await _repository.setActiveDevice(lock.deviceId, deviceName: lock.deviceName);
-      if (mounted) {
-        setState(() => _loading = false);
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MainNavScreen()),
-        );
-      }
+      await _openLock(lock);
     } else if (lock.isPending(user?.uid) || (access.deviceUid == lock.deviceId && access.isPendingApproval)) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.hourglass_top_rounded, color: AppColors.warning, size: 22),
-              SizedBox(width: 10),
-              Text('Approval Pending'),
-            ],
-          ),
-          content: Text(
-            'Your request to link to "${lock.deviceName}" is awaiting approval from the lock owner.\n\nYou will be able to open and control this lock once the owner approves your request.',
-          ),
-          actions: [
-            if (_repository.isSimulation)
-              TextButton.icon(
-                icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
-                label: const Text('Approve as Owner (Demo)'),
-                onPressed: () async {
-                  Navigator.of(ctx).pop();
-                  await _repository.approveRequest(user?.uid ?? 'demo-user');
-                  _toast('Owner approved request! Taking you to the lock...');
-                  final updatedLock = _repository.availableLocks.firstWhere(
-                    (l) => l.deviceId == lock.deviceId,
-                    orElse: () => lock,
-                  );
-                  await _selectLock(updatedLock);
-                },
-              ),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
+      _showWaitingForApprovalDialog(lock);
     } else {
       _showRequestAccessDialog(lock);
     }
+  }
+
+  void _showWaitingForApprovalDialog(LockDeviceInfo lock) {
+    final user = AuthService.instance.currentUser;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2.2, color: AppColors.brand),
+            ),
+            SizedBox(width: 12),
+            Text('Waiting for Approval'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Your request to access "${lock.deviceName}" is awaiting approval from the lock owner.',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'As soon as the owner approves your request, this screen will automatically open and take you directly to the lock.',
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
+            ),
+          ],
+        ),
+        actions: [
+          if (_repository.isSimulation)
+            TextButton.icon(
+              icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+              label: const Text('Approve as Owner (Demo)'),
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                await _repository.approveRequest(user?.uid ?? 'demo-user');
+                _toast('Owner approved request! Opening lock...');
+                final updatedLock = _repository.availableLocks.firstWhere(
+                  (l) => l.deviceId == lock.deviceId,
+                  orElse: () => lock,
+                );
+                await _openLock(updatedLock);
+              },
+            ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
 
@@ -181,6 +214,7 @@ class _LockSelectionScreenState extends State<LockSelectionScreen> {
 
     if (confirmed == true) {
       setState(() => _loading = true);
+      _pendingApprovalDeviceId = lock.deviceId;
       await _repository.setActiveDevice(lock.deviceId, deviceName: lock.deviceName);
       await _repository.requestAccess(email: email);
       if (mounted) {
@@ -188,7 +222,7 @@ class _LockSelectionScreenState extends State<LockSelectionScreen> {
           _loading = false;
           _locks = _repository.availableLocks;
         });
-        _toast('Access request sent! Waiting for owner approval.');
+        _showWaitingForApprovalDialog(lock);
       }
     }
   }

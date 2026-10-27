@@ -3,9 +3,11 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../repositories/lock_repository.dart';
 import '../theme/app_colors.dart';
 import 'dashboard_screen.dart';
 import 'history_screen.dart';
+import 'lock_selection_screen.dart';
 import 'settings_screen.dart';
 
 class MainNavScreen extends StatefulWidget {
@@ -16,13 +18,61 @@ class MainNavScreen extends StatefulWidget {
 }
 
 class _MainNavScreenState extends State<MainNavScreen> {
+  final LockRepository _repository = lockRepository();
   int _currentIndex = 0;
+  VoidCallback? _accessListener;
 
   static const _items = [
     (Icons.lock_outline_rounded, Icons.lock_rounded, 'Door'),
     (Icons.history_rounded, Icons.history_rounded, 'Activity'),
     (Icons.tune_outlined, Icons.tune_rounded, 'Settings'),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _accessListener = () {
+      if (!mounted) return;
+      final access = _repository.access.value;
+      if (access.status == AccessStatus.denied) {
+        final lockName = _repository.activeDeviceName;
+        // Immediately kick user back to LockSelectionScreen
+        Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LockSelectionScreen()),
+          (route) => false,
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.alarm,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            content: Row(
+              children: [
+                const Icon(Icons.block_rounded, color: Colors.white, size: 22),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Access to "$lockName" has been revoked by the owner.',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13.5),
+                  ),
+                ),
+              ],
+            ),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    };
+    _repository.access.addListener(_accessListener!);
+  }
+
+  @override
+  void dispose() {
+    if (_accessListener != null) {
+      _repository.access.removeListener(_accessListener!);
+    }
+    super.dispose();
+  }
 
   void _select(int i) {
     if (i == _currentIndex) return;

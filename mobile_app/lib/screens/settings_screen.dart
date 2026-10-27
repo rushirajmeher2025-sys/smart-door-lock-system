@@ -539,7 +539,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               trailing: IconButton(
                                 tooltip: 'Remove access',
                                 icon: const Icon(Icons.close_rounded, size: 18),
-                                onPressed: () => _repository.setMember(uid, false),
+                                onPressed: () async {
+                                  final confirmed = await showDialog<bool>(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      title: const Row(
+                                        children: [
+                                          Icon(Icons.person_remove_rounded, color: AppColors.alarm, size: 22),
+                                          SizedBox(width: 10),
+                                          Text('Revoke Access?'),
+                                        ],
+                                      ),
+                                      content: Text(
+                                        'Remove access for user "$uid"?\n\nThey will immediately be disconnected from this lock and returned to the lock list.',
+                                        style: const TextStyle(fontSize: 13.5, height: 1.4),
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.of(ctx).pop(false),
+                                          child: const Text('Cancel'),
+                                        ),
+                                        FilledButton(
+                                          style: FilledButton.styleFrom(backgroundColor: AppColors.alarm),
+                                          onPressed: () => Navigator.of(ctx).pop(true),
+                                          child: const Text('Revoke Access'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (confirmed == true) {
+                                    await _repository.setMember(uid, false);
+                                    _toast('Access revoked for user. Disconnected immediately.');
+                                  }
+                                },
                               ),
                             ),
                           ListTile(
