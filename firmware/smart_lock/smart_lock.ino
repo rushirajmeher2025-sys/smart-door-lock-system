@@ -230,35 +230,43 @@ void drawCenteredText(String text, int y, int size) {
 
 // ===================== WI-FI CORNER INDICATOR =====================
 // Always drawn in the top-right corner of the OLED display (x: 108..127, y: 1..10)
-// Connected:    Crisp Wi-Fi broadcast waves icon + cloud link bead
-// Disconnected: Slashed Wi-Fi icon + '!' warning indicator
+// Uses authentic 90-degree circular arcs (-45° to +45° span) instead of a 180° semicircle.
+
+static void drawArc90(int cx, int cy, int r) {
+  int d = (r * 707) / 1000;
+  for (int dx = -d; dx <= d; dx++) {
+    int dy = (int)(sqrt((float)(r * r - dx * dx)) + 0.5f);
+    u8g2.drawPixel(cx + dx, cy - dy);
+  }
+}
+
 void drawWifiIndicator() {
   const bool wifiOk = cloudWifiConnected();
   const int cx = 121;
-  const int cy = 9;
+  const int cy = 10;
 
   if (wifiOk) {
     // Solid base dot
     u8g2.drawDisc(cx, cy, 1);
-    // Inner wave arc
-    u8g2.drawCircle(cx, cy, 4, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_UPPER_LEFT);
-    // Outer wave arc
-    u8g2.drawCircle(cx, cy, 7, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_UPPER_LEFT);
+    // Inner 90-degree circular arc
+    drawArc90(cx, cy, 5);
+    // Outer 90-degree circular arc
+    drawArc90(cx, cy, 9);
 
     // If also signed in & communicating with Firebase cloud, show cloud bead
     if (cloudOnline()) {
-      u8g2.drawPixel(cx - 9, cy - 3);
+      u8g2.drawPixel(cx - 9, cy - 4);
     }
   } else {
     // Slashed Wi-Fi icon when disconnected
     u8g2.drawCircle(cx, cy, 1);
-    u8g2.drawCircle(cx, cy, 6, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_UPPER_LEFT);
+    drawArc90(cx, cy, 7);
     // Bold diagonal strike-through
-    u8g2.drawLine(cx - 7, cy - 8, cx + 7, cy + 1);
-    u8g2.drawLine(cx - 7, cy - 7, cx + 7, cy + 2);
+    u8g2.drawLine(cx - 7, cy - 9, cx + 7, cy + 1);
+    u8g2.drawLine(cx - 7, cy - 8, cx + 7, cy + 2);
     // '!' attention mark before the slashed icon
-    u8g2.drawLine(cx - 10, cy - 7, cx - 10, cy - 3);
-    u8g2.drawPixel(cx - 10, cy - 1);
+    u8g2.drawLine(cx - 10, cy - 8, cx - 10, cy - 4);
+    u8g2.drawPixel(cx - 10, cy - 2);
   }
 }
 
