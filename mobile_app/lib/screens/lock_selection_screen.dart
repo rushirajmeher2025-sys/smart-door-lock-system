@@ -416,11 +416,11 @@ class _LockSelectionScreenState extends State<LockSelectionScreen> {
 
     if (isOwner) {
       badgeColor = AppColors.brand;
-      badgeLabel = 'OWNER';
-      badgeIcon = Icons.stars_rounded;
+      badgeLabel = 'OWNER PORTAL';
+      badgeIcon = Icons.admin_panel_settings_rounded;
     } else if (isMember) {
       badgeColor = const Color(0xFF38BDF8); // Sky blue
-      badgeLabel = 'MEMBER ACCESS';
+      badgeLabel = 'MEMBER PORTAL';
       badgeIcon = Icons.verified_user_rounded;
     } else if (isPending) {
       badgeColor = AppColors.warning;
@@ -526,14 +526,28 @@ class _LockSelectionScreenState extends State<LockSelectionScreen> {
                   ),
                 ),
                 const Spacer(),
-                if (isOwner || isMember) ...[
+                if (isOwner) ...[
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.brand,
+                      foregroundColor: Colors.black,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    ),
+                    icon: const Icon(Icons.admin_panel_settings_rounded, size: 16),
+                    label: const Text('Owner Portal', style: TextStyle(fontWeight: FontWeight.w700)),
+                    onPressed: () => _selectLock(lock),
+                  ),
+                ] else if (isMember) ...[
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF0284C7),
+                      foregroundColor: Colors.white,
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     ),
                     icon: const Icon(Icons.arrow_forward_rounded, size: 16),
-                    label: const Text('Open Lock'),
+                    label: const Text('Member Portal', style: TextStyle(fontWeight: FontWeight.w600)),
                     onPressed: () => _selectLock(lock),
                   ),
                 ] else if (isPending) ...[

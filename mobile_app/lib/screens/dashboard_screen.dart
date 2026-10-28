@@ -22,8 +22,13 @@ import 'lock_selection_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback? onNavigateToHistory;
+  final VoidCallback? onNavigateToMembers;
 
-  const DashboardScreen({super.key, this.onNavigateToHistory});
+  const DashboardScreen({
+    super.key,
+    this.onNavigateToHistory,
+    this.onNavigateToMembers,
+  });
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -289,6 +294,135 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ],
                     ],
                   ),
+                  const SizedBox(height: 12),
+                  if (access.isOwner)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            AppColors.brand.withValues(alpha: 0.16),
+                            AppColors.surfaceLight,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.brand.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: AppColors.brand.withValues(alpha: 0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.admin_panel_settings_rounded, color: AppColors.brand, size: 18),
+                          ),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'OWNER PORTAL',
+                                  style: TextStyle(
+                                    color: AppColors.brand,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                Text(
+                                  'Full Administrator & Hardware Control',
+                                  style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (widget.onNavigateToMembers != null)
+                            TextButton.icon(
+                              style: TextButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              ),
+                              onPressed: widget.onNavigateToMembers,
+                              icon: const Icon(Icons.group_outlined, size: 15),
+                              label: Text(
+                                _pendingRequests.isNotEmpty ? '${_pendingRequests.length} pending' : 'Members',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: _pendingRequests.isNotEmpty ? AppColors.warning : AppColors.brand,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFF38BDF8).withValues(alpha: 0.15),
+                            AppColors.surfaceLight,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF38BDF8).withValues(alpha: 0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.verified_user_rounded, color: Color(0xFF38BDF8), size: 18),
+                          ),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'MEMBER PORTAL',
+                                  style: TextStyle(
+                                    color: Color(0xFF38BDF8),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                Text(
+                                  'Authorized Guest & Family Access',
+                                  style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'ACTIVE',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Color(0xFF38BDF8),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   if (access.isOwner && _pendingRequests.isNotEmpty) ...[
                     const SizedBox(height: 18),
                     for (final req in _pendingRequests) _buildPendingRequestCard(req),

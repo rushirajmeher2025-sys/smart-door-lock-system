@@ -354,8 +354,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             valueListenable: _repository.access,
             builder: (context, access, _) {
               final role = switch (access.status) {
-                AccessStatus.owner => ('OWNER', AppColors.brand),
-                AccessStatus.member => ('MEMBER', AppColors.textSecondary),
+                AccessStatus.owner => ('OWNER PORTAL', AppColors.brand),
+                AccessStatus.member => ('MEMBER PORTAL', const Color(0xFF38BDF8)),
                 AccessStatus.demo => ('DEMO', AppColors.textSecondary),
                 AccessStatus.denied => ('NO ACCESS', AppColors.alarm),
                 AccessStatus.error => ('ERROR', AppColors.alarm),
@@ -364,7 +364,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               return ListView(
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 120),
                 children: [
-                  const ScreenHeader(title: 'Settings', subtitle: AppConstants.appName),
+                  ScreenHeader(
+                    title: 'Settings',
+                    subtitle: access.isOwner
+                        ? 'Owner Portal · ${AppConstants.appName}'
+                        : 'Member Portal · ${AppConstants.appName}',
+                  ),
                   const SizedBox(height: 22),
                   Reveal(
                     child: Panel(
@@ -592,55 +597,83 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 28),
-                  Reveal(
-                    delay: const Duration(milliseconds: 140),
-                    child: SettingsGroup(
-                      title: 'Keypad & PIN security',
-                      footer: 'Protected by fingerprint, face scan, or password. Keep your PIN confidential.',
-                      children: [
-                        ListTile(
-                          leading: const Icon(Icons.dialpad_rounded, color: AppColors.brand),
-                          title: const Text('Keypad PIN'),
-                          subtitle: Text(
-                            _pinRevealed
-                                ? (_currentPin ?? '1234')
-                                : '••••  (tap eye icon to authenticate & view)',
-                            style: _pinRevealed
-                                ? AppTheme.mono(fontSize: 16, color: AppColors.textPrimary)
-                                : const TextStyle(color: AppColors.textSecondary),
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                tooltip: _pinRevealed ? 'Hide PIN' : 'View PIN (requires authentication)',
-                                icon: Icon(
-                                  _pinRevealed ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                                  color: _pinRevealed ? AppColors.brand : AppColors.textSecondary,
-                                ),
-                                onPressed: _togglePinVisibility,
-                              ),
-                              if (_pinRevealed)
+                  if (access.isOwner) ...[
+                    const SizedBox(height: 28),
+                    Reveal(
+                      delay: const Duration(milliseconds: 140),
+                      child: SettingsGroup(
+                        title: 'Keypad & PIN security',
+                        footer: 'Protected by fingerprint, face scan, or password. Keep your PIN confidential.',
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.dialpad_rounded, color: AppColors.brand),
+                            title: const Text('Keypad PIN'),
+                            subtitle: Text(
+                              _pinRevealed
+                                  ? (_currentPin ?? '1234')
+                                  : '••••  (tap eye icon to authenticate & view)',
+                              style: _pinRevealed
+                                  ? AppTheme.mono(fontSize: 16, color: AppColors.textPrimary)
+                                  : const TextStyle(color: AppColors.textSecondary),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
                                 IconButton(
-                                  tooltip: 'Copy PIN',
-                                  icon: const Icon(Icons.copy_rounded, size: 18),
-                                  onPressed: () => _copy(_currentPin ?? '1234', 'PIN'),
+                                  tooltip: _pinRevealed ? 'Hide PIN' : 'View PIN (requires authentication)',
+                                  icon: Icon(
+                                    _pinRevealed ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                                    color: _pinRevealed ? AppColors.brand : AppColors.textSecondary,
+                                  ),
+                                  onPressed: _togglePinVisibility,
                                 ),
-                              FilledButton.tonal(
-                                style: FilledButton.styleFrom(
-                                  visualDensity: VisualDensity.compact,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                if (_pinRevealed)
+                                  IconButton(
+                                    tooltip: 'Copy PIN',
+                                    icon: const Icon(Icons.copy_rounded, size: 18),
+                                    onPressed: () => _copy(_currentPin ?? '1234', 'PIN'),
+                                  ),
+                                FilledButton.tonal(
+                                  style: FilledButton.styleFrom(
+                                    visualDensity: VisualDensity.compact,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  ),
+                                  onPressed: _showChangePinDialog,
+                                  child: const Text('Change', style: TextStyle(fontSize: 12.5)),
                                 ),
-                                onPressed: _showChangePinDialog,
-                                child: const Text('Change', style: TextStyle(fontSize: 12.5)),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
+                  ] else ...[
+                    const SizedBox(height: 28),
+                    const Reveal(
+                      delay: Duration(milliseconds: 140),
+                      child: SettingsGroup(
+                        title: 'Member Access Permissions',
+                        footer: 'Keypad PIN management and member access are controlled exclusively by the lock owner.',
+                        children: [
+                          ListTile(
+                            leading: Icon(Icons.check_circle_rounded, color: Color(0xFF38BDF8)),
+                            title: Text('Door Control Access'),
+                            subtitle: Text('Authorized to remotely lock and unlock this door'),
+                          ),
+                          ListTile(
+                            leading: Icon(Icons.check_circle_rounded, color: Color(0xFF38BDF8)),
+                            title: Text('Door Sensor Monitoring'),
+                            subtitle: Text('View live open/closed sensor status'),
+                          ),
+                          ListTile(
+                            leading: Icon(Icons.check_circle_rounded, color: Color(0xFF38BDF8)),
+                            title: Text('Security & Activity Alerts'),
+                            subtitle: Text('Receive notifications on all door lock/unlock events'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 28),
                   Reveal(
                     delay: const Duration(milliseconds: 160),
