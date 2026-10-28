@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../repositories/lock_repository.dart';
+import '../services/notification_service.dart';
 import '../theme/app_colors.dart';
+import '../widgets/in_app_notification_banner.dart';
 import 'dashboard_screen.dart';
 import 'history_screen.dart';
 import 'lock_selection_screen.dart';
@@ -31,6 +33,7 @@ class _MainNavScreenState extends State<MainNavScreen> {
   @override
   void initState() {
     super.initState();
+    NotificationService.instance.attachLockRepository(_repository);
     _accessListener = () {
       if (!mounted) return;
       final access = _repository.access.value;
@@ -88,13 +91,15 @@ class _MainNavScreenState extends State<MainNavScreen> {
       const SettingsScreen(),
     ];
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      extendBody: true,
-      body: IndexedStack(index: _currentIndex, children: screens),
-      bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.only(bottom: 12),
-        child: Center(
+    return InAppNotificationBanner(
+      onNotificationTap: () => _select(1),
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        extendBody: true,
+        body: IndexedStack(index: _currentIndex, children: screens),
+        bottomNavigationBar: SafeArea(
+          minimum: const EdgeInsets.only(bottom: 12),
+          child: Center(
           heightFactor: 1,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(22),
@@ -160,8 +165,9 @@ class _MainNavScreenState extends State<MainNavScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _NavItem extends StatelessWidget {

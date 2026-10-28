@@ -7,6 +7,7 @@ import '../repositories/lock_repository.dart';
 import '../services/auth_service.dart';
 import '../services/biometric_service.dart';
 import '../services/firebase_init.dart';
+import '../services/notification_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/constants.dart';
@@ -651,6 +652,73 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _InfoRow(icon: Icons.lock_clock_outlined, title: 'PIN lockout', subtitle: 'After ${AppConstants.maxPinAttempts} wrong entries', value: '${AppConstants.lockoutTimeSeconds} s', mono: true),
                         _InfoRow(icon: Icons.sensor_door_outlined, title: 'Door left open', subtitle: 'Gentle beeps', value: '${AppConstants.doorWarningSeconds} s', mono: true),
                         _InfoRow(icon: Icons.crisis_alert_rounded, title: 'Break-in alarm', subtitle: 'Only the keypad PIN stops it', value: '30 s', mono: true),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  Reveal(
+                    delay: const Duration(milliseconds: 170),
+                    child: SettingsGroup(
+                      title: 'Activity notifications',
+                      footer: 'Get real-time push and in-app notifications whenever lock activity occurs.',
+                      children: [
+                        ValueListenableBuilder<bool>(
+                          valueListenable: NotificationService.instance.activityNotificationsEnabled,
+                          builder: (context, enabled, _) => SwitchListTile(
+                            secondary: const Icon(Icons.notifications_active_outlined, color: AppColors.brand),
+                            title: const Text('Activity alerts'),
+                            subtitle: const Text('Notifications when the door is locked or unlocked'),
+                            value: enabled,
+                            onChanged: (val) {
+                              NotificationService.instance.activityNotificationsEnabled.value = val;
+                              setState(() {});
+                            },
+                          ),
+                        ),
+                        ValueListenableBuilder<bool>(
+                          valueListenable: NotificationService.instance.alarmNotificationsEnabled,
+                          builder: (context, enabled, _) => SwitchListTile(
+                            secondary: const Icon(Icons.crisis_alert_rounded, color: AppColors.alarm),
+                            title: const Text('Security alarms & warnings'),
+                            subtitle: const Text('High-priority alerts for break-ins, tampering, & lockouts'),
+                            value: enabled,
+                            onChanged: (val) {
+                              NotificationService.instance.alarmNotificationsEnabled.value = val;
+                              setState(() {});
+                            },
+                          ),
+                        ),
+                        ValueListenableBuilder<bool>(
+                          valueListenable: NotificationService.instance.inAppBannersEnabled,
+                          builder: (context, enabled, _) => SwitchListTile(
+                            secondary: const Icon(Icons.notification_important_outlined),
+                            title: const Text('In-app alert banners'),
+                            subtitle: const Text('Show floating banner while using the app'),
+                            value: enabled,
+                            onChanged: (val) {
+                              NotificationService.instance.inAppBannersEnabled.value = val;
+                              setState(() {});
+                            },
+                          ),
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.send_rounded, color: AppColors.brand),
+                          title: const Text('Test notification'),
+                          subtitle: const Text('Send a test lock activity alert now'),
+                          trailing: FilledButton.tonal(
+                            style: FilledButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            ),
+                            onPressed: () async {
+                              await NotificationService.instance.sendTestNotification(
+                                lockName: _repository.activeDeviceName,
+                              );
+                              _toast('Test notification sent!');
+                            },
+                            child: const Text('Send test', style: TextStyle(fontSize: 12.5)),
+                          ),
+                        ),
                       ],
                     ),
                   ),
