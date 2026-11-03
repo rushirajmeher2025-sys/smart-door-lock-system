@@ -27,6 +27,7 @@ class _MainNavScreenState extends State<MainNavScreen> {
   int _currentIndex = 0;
   VoidCallback? _accessListener;
   StreamSubscription<List<AccessRequest>>? _requestsSub;
+  StreamSubscription<Map<String, dynamic>>? _notificationSub;
   int _pendingCount = 0;
 
   @override
@@ -36,6 +37,12 @@ class _MainNavScreenState extends State<MainNavScreen> {
     _pendingCount = _repository.currentPendingRequests.length;
     _requestsSub = _repository.pendingRequestsStream.listen((reqs) {
       if (mounted) setState(() => _pendingCount = reqs.length);
+    });
+
+    _notificationSub = NotificationService.instance.onNotificationClick.listen((_) {
+      if (!mounted) return;
+      final isOwner = _repository.access.value.isOwner;
+      _select(isOwner ? 2 : 1);
     });
 
     _accessListener = () {
@@ -75,6 +82,7 @@ class _MainNavScreenState extends State<MainNavScreen> {
   @override
   void dispose() {
     _requestsSub?.cancel();
+    _notificationSub?.cancel();
     if (_accessListener != null) {
       _repository.access.removeListener(_accessListener!);
     }

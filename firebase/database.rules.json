@@ -89,6 +89,18 @@
           "deviceName": { ".validate": "newData.isString()" },
           "firmwareVersion": { ".validate": "newData.isString()" },
           "hardware": { ".validate": "newData.isString()" }
+        },
+
+        "fcmTokens": {
+          // Device push notification tokens for background/terminated app alerts
+          ".read": "auth != null",
+          "$uid": {
+            ".write": "auth != null && (auth.uid === $uid || root.child('devices/' + $deviceId + '/metadata/ownerUid').val() === auth.uid)",
+            ".validate": "newData.hasChildren(['token', 'updatedAt'])",
+            "token": { ".validate": "newData.isString()" },
+            "updatedAt": { ".validate": "newData.isNumber()" },
+            "platform": { ".validate": "newData.isString() || newData.val() == null" }
+          }
         }
       }
     },

@@ -23,6 +23,16 @@ npx firebase-tools deploy --only database
 
 Without this step the database stays locked and nothing can connect.
 
+### Push notifications when the app is closed (Firebase Cloud Functions)
+When the app is closed or terminated, security alerts and burglar alarms are pushed directly to phones using Firebase Cloud Messaging (FCM). To deploy the push function:
+
+```bash
+cd firebase/functions
+npm install
+cd ..
+npx firebase-tools deploy --only functions
+```
+
 ## 3. Connect the app
 
 ```bash
