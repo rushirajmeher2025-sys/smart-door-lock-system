@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "13928106435",
+    "firebase_url": "https://lockify-2e19b-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "lockify-2e19b",
+    "storage_bucket": "lockify-2e19b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:13928106435:android:d2292bee211b17d3f09576",
+        "android_client_info": {
+          "package_name": "com.smartlock.app.smart_door_lock"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC6hIhBF3fjtAft2VU7q0wHUI9FbsdYbYQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
