@@ -40,7 +40,7 @@ class _SmartLockAppState extends State<SmartLockApp> {
       initialRoute: AppRoutes.initialRoute,
       routes: AppRoutes.routes,
       // The launch animation plays on top while the app starts underneath
-      builder: (context, child) => widget.showIntro ? IntroOverlay(child: child!) : child!,
+      builder: (context, child) => (child == null) ? const SizedBox.shrink() : (widget.showIntro ? IntroOverlay(child: child) : child),
     );
   }
 }

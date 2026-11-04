@@ -25,31 +25,40 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   Widget build(BuildContext context) {
-    // If Firebase project credentials are not yet configured on this machine
-    if (!FirebaseInitService.isConfigured && !_bypassedForDemo) {
-      return _buildFirebaseConfigPrompt(context);
-    }
+    return ValueListenableBuilder<bool>(
+      valueListenable: FirebaseInitService.isReady,
+      builder: (context, isReady, _) {
+        if (!isReady) {
+          return const _Splash(key: ValueKey('init_splash'));
+        }
 
-    // When Firebase is configured, listen to real-time auth state
-    if (FirebaseInitService.isConfigured) {
-      return StreamBuilder<User?>(
-        stream: AuthService.instance.authStateChanges,
-        builder: (context, snapshot) {
-          final Widget page;
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            page = const _Splash(key: ValueKey('splash'));
-          } else if (snapshot.data != null) {
-            page = const LockSelectionScreen(key: ValueKey('locks'));
-          } else {
-            page = const LoginScreen(key: ValueKey('login'));
-          }
-          return AnimatedSwitcher(duration: const Duration(milliseconds: 400), child: page);
-        },
-      );
-    }
+        // If Firebase project credentials are not yet configured on this machine
+        if (!FirebaseInitService.isConfigured && !_bypassedForDemo) {
+          return _buildFirebaseConfigPrompt(context);
+        }
 
-    // Fallback when demo mode is enabled
-    return const LockSelectionScreen(key: ValueKey('demo_locks'));
+        // When Firebase is configured, listen to real-time auth state
+        if (FirebaseInitService.isConfigured) {
+          return StreamBuilder<User?>(
+            stream: AuthService.instance.authStateChanges,
+            builder: (context, snapshot) {
+              final Widget page;
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                page = const _Splash(key: ValueKey('splash'));
+              } else if (snapshot.data != null) {
+                page = const LockSelectionScreen(key: ValueKey('locks'));
+              } else {
+                page = const LoginScreen(key: ValueKey('login'));
+              }
+              return AnimatedSwitcher(duration: const Duration(milliseconds: 400), child: page);
+            },
+          );
+        }
+
+        // Fallback when demo mode is enabled
+        return const LockSelectionScreen(key: ValueKey('demo_locks'));
+      },
+    );
   }
 
   Widget _buildFirebaseConfigPrompt(BuildContext context) {

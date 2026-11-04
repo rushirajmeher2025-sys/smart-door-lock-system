@@ -8,6 +8,7 @@ class FirebaseInitService {
   static bool isConfigured = false;
   static bool usingEmulator = false;
   static String? initError;
+  static final ValueNotifier<bool> isReady = ValueNotifier<bool>(false);
 
   /// Local Firebase emulator host, e.g. `--dart-define=LOCKIFY_EMULATOR=127.0.0.1`.
   /// Start it with `firebase emulators:start --project demo-lockify` in firebase/.
@@ -61,6 +62,8 @@ class FirebaseInitService {
       if (kDebugMode) {
         print('[FIREBASE] Not configured, starting in Demo mode: $e');
       }
+    } finally {
+      isReady.value = true;
     }
   }
 }

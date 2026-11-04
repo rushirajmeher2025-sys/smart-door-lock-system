@@ -14,24 +14,16 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     await FirebaseInitService.initialize();
     await NotificationService.instance.handleBackgroundMessage(message);
   } catch (e) {
-    debugPrint('[FCM Background] Error: $e');
+    debugPrint('[FCM Background] Error: ');
   }
 }
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // Prevent any unhandled Flutter framework errors from terminating the app
-  FlutterError.onError = (details) {
-    FlutterError.presentError(details);
-    debugPrint('[FLUTTER] ${details.exceptionAsString()}');
-  };
-
+Future<void> _bootstrapServices() async {
   // 1. Initialize Firebase
   try {
     await FirebaseInitService.initialize();
   } catch (e) {
-    debugPrint('[INIT] Firebase init error: $e');
+    debugPrint('[INIT] Firebase init error: ');
   }
 
   // 2. Register FCM background message handler only if Firebase configured
@@ -39,7 +31,7 @@ Future<void> main() async {
     try {
       FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     } catch (e) {
-      debugPrint('[INIT] FCM onBackgroundMessage error: $e');
+      debugPrint('[INIT] FCM onBackgroundMessage error: ');
     }
   }
 
@@ -47,23 +39,42 @@ Future<void> main() async {
   try {
     await ThemeService.instance.initialize();
   } catch (e) {
-    debugPrint('[INIT] ThemeService init error: $e');
+    debugPrint('[INIT] ThemeService init error: ');
   }
 
   // 4. Initialize Notification Service
   try {
     await NotificationService.instance.initialize();
   } catch (e) {
-    debugPrint('[INIT] NotificationService init error: $e');
+    debugPrint('[INIT] NotificationService init error: ');
   }
 
   // 5. Initialize Lock Widget Service
   try {
     await LockWidgetService.instance.initialize();
   } catch (e) {
-    debugPrint('[INIT] LockWidgetService init error: $e');
+    debugPrint('[INIT] LockWidgetService init error: ');
   }
+}
 
-  // 6. Always mount and run the application
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Prevent any unhandled Flutter framework errors from terminating the app
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('[FLUTTER] ');
+  };
+
+  // Prevent any unhandled asynchronous errors from terminating the app
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('[ASYNC ERROR] ');
+    return true;
+  };
+
+  // Mount UI immediately so the Flutter view attaches without waiting for network/services
   runApp(const SmartLockApp());
+
+  // Bootstrap background services concurrently
+  _bootstrapServices();
 }
