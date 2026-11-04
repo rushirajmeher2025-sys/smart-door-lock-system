@@ -5,26 +5,40 @@ import 'app_colors.dart';
 class AppTheme {
   /// Headlines: Geist, tight tracking.
   static TextStyle display({
+    BuildContext? context,
     double fontSize = 28,
     FontWeight fontWeight = FontWeight.w600,
-    Color color = AppColors.textPrimary,
+    Color? color,
     double letterSpacing = -0.9,
     double? height,
   }) {
+    Color? resolved = color;
+    if (resolved == null && context != null) {
+      resolved = AppColors.textPrimaryOf(context);
+    }
     return GoogleFonts.geist(
       fontSize: fontSize,
       fontWeight: fontWeight,
-      color: color,
+      color: resolved,
       letterSpacing: letterSpacing,
       height: height,
     );
   }
 
   /// Technical details (IDs, versions, timestamps): Geist Mono.
-  static TextStyle mono({double fontSize = 12, Color color = AppColors.textMuted, FontWeight fontWeight = FontWeight.w400}) {
+  static TextStyle mono({
+    BuildContext? context,
+    double fontSize = 12,
+    Color? color,
+    FontWeight fontWeight = FontWeight.w400,
+  }) {
+    Color? resolved = color;
+    if (resolved == null && context != null) {
+      resolved = AppColors.textMutedOf(context);
+    }
     return GoogleFonts.geistMono(
       fontSize: fontSize,
-      color: color,
+      color: resolved,
       fontWeight: fontWeight,
       letterSpacing: 0,
       fontFeatures: const [FontFeature.tabularFigures()],
@@ -32,8 +46,12 @@ class AppTheme {
   }
 
   /// Small upper-case section label.
-  static TextStyle label({Color color = AppColors.textMuted}) {
-    return GoogleFonts.geistMono(fontSize: 11, color: color, fontWeight: FontWeight.w500, letterSpacing: 1.1);
+  static TextStyle label({BuildContext? context, Color? color}) {
+    Color? resolved = color;
+    if (resolved == null && context != null) {
+      resolved = AppColors.textMutedOf(context);
+    }
+    return GoogleFonts.geistMono(fontSize: 11, color: resolved, fontWeight: FontWeight.w500, letterSpacing: 1.1);
   }
 
   static ThemeData get lightTheme {
@@ -117,6 +135,17 @@ class AppTheme {
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           side: BorderSide(color: lHairline),
         ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: lSurface,
+        disabledColor: lSurfaceLight,
+        selectedColor: AppColors.brand.withValues(alpha: 0.18),
+        secondarySelectedColor: AppColors.brand.withValues(alpha: 0.18),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        labelStyle: GoogleFonts.geist(color: lTextPrimary, fontSize: 13),
+        secondaryLabelStyle: GoogleFonts.geist(color: AppColors.brand, fontSize: 13, fontWeight: FontWeight.w600),
+        side: const BorderSide(color: lHairline),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
@@ -360,6 +389,17 @@ class AppTheme {
           return states.contains(WidgetState.selected) ? AppColors.brand : AppColors.surfaceLight;
         }),
         trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: AppColors.surface,
+        disabledColor: AppColors.surfaceLight,
+        selectedColor: AppColors.brand.withValues(alpha: 0.18),
+        secondarySelectedColor: AppColors.brand.withValues(alpha: 0.18),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        labelStyle: GoogleFonts.geist(color: AppColors.textPrimary, fontSize: 13),
+        secondaryLabelStyle: GoogleFonts.geist(color: AppColors.brand, fontSize: 13, fontWeight: FontWeight.w600),
+        side: const BorderSide(color: AppColors.hairline),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
       progressIndicatorTheme: const ProgressIndicatorThemeData(color: AppColors.textPrimary),
       pageTransitionsTheme: const PageTransitionsTheme(

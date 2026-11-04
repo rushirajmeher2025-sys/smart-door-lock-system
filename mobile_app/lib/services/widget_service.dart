@@ -10,9 +10,23 @@ Future<void> widgetBackgroundCallback(Uri? uri) async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
     if (uri?.toString().contains('lock_action') == true) {
+      await HomeWidget.saveWidgetData<String>('lock_status', 'Locking…');
+      await HomeWidget.updateWidget(
+        name: 'LockWidgetProvider',
+        androidName: 'LockWidgetProvider',
+        qualifiedAndroidName: 'com.smartlock.app.smart_door_lock.LockWidgetProvider',
+      );
+
       await FirebaseInitService.initialize();
       final repo = lockRepository();
       await repo.sendCommand(RemoteAction.lock);
+
+      await HomeWidget.saveWidgetData<String>('lock_status', 'Locked');
+      await HomeWidget.updateWidget(
+        name: 'LockWidgetProvider',
+        androidName: 'LockWidgetProvider',
+        qualifiedAndroidName: 'com.smartlock.app.smart_door_lock.LockWidgetProvider',
+      );
     }
   } catch (e) {
     debugPrint('[Widget Background] Error: $e');
@@ -26,8 +40,8 @@ class LockWidgetService {
   Future<void> initialize() async {
     if (kIsWeb) return;
     try {
-      await HomeWidget.registerInteractivityCallback(widgetBackgroundCallback);
       await HomeWidget.setAppGroupId('group.com.smartlock.app.smart_door_lock');
+      await HomeWidget.registerInteractivityCallback(widgetBackgroundCallback);
     } catch (e) {
       debugPrint('[Widget] Init error: $e');
     }
@@ -43,7 +57,11 @@ class LockWidgetService {
       await HomeWidget.saveWidgetData<String>('lock_status', lockStatus);
       await HomeWidget.saveWidgetData<String>('device_name', deviceName);
       await HomeWidget.saveWidgetData<bool>('is_online', isOnline);
-      await HomeWidget.updateWidget(androidName: 'LockWidgetProvider');
+      await HomeWidget.updateWidget(
+        name: 'LockWidgetProvider',
+        androidName: 'LockWidgetProvider',
+        qualifiedAndroidName: 'com.smartlock.app.smart_door_lock.LockWidgetProvider',
+      );
     } catch (e) {
       debugPrint('[Widget] Update error: $e');
     }

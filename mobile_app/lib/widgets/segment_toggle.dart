@@ -12,13 +12,15 @@ class SegmentToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = AppColors.isDark(context);
+
     return Container(
       height: 42,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.surfaceOf(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.hairline),
+        border: Border.all(color: AppColors.hairlineOf(context)),
       ),
       child: LayoutBuilder(
         builder: (context, box) {
@@ -35,9 +37,14 @@ class SegmentToggle extends StatelessWidget {
                 width: w,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceLight,
+                    color: AppColors.surfaceLightOf(context),
                     borderRadius: BorderRadius.circular(9),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+                    border: Border.all(
+                      color: isDark ? Colors.white.withValues(alpha: 0.07) : Colors.black.withValues(alpha: 0.04),
+                    ),
+                    boxShadow: [
+                      if (!isDark) BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 4, offset: const Offset(0, 1)),
+                    ],
                   ),
                 ),
               ),
@@ -55,10 +62,11 @@ class SegmentToggle extends StatelessWidget {
                             child: AnimatedDefaultTextStyle(
                               duration: const Duration(milliseconds: 200),
                               style: DefaultTextStyle.of(context).style.copyWith(
-                                color: i == index ? AppColors.textPrimary : AppColors.textMuted,
+                                color: i == index
+                                    ? AppColors.textPrimaryOf(context)
+                                    : AppColors.textMutedOf(context),
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.w500,
-                                letterSpacing: -0.1,
                               ),
                               child: Text(labels[i]),
                             ),

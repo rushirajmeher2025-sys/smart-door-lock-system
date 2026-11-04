@@ -241,8 +241,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   itemBuilder: (context, i) {
                     final chip = _chips[i];
                     final selected = _activeChips.contains(i);
+                    final isDark = AppColors.isDark(context);
+                    final chipBg = isDark ? AppColors.darkSurface : AppColors.lightSurface;
+                    final chipBorder = isDark ? AppColors.darkHairline : AppColors.lightHairline;
+                    final labelColor = selected ? cs.secondary : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary);
                     return FilterChip(
-                      label: Text('${chip.emoji} ${chip.label}'),
+                      label: Text("${chip.emoji} ${chip.label}"),
                       selected: selected,
                       onSelected: (val) {
                         setState(() {
@@ -253,15 +257,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           }
                         });
                       },
+                      backgroundColor: chipBg,
                       selectedColor: cs.secondary.withValues(alpha: 0.18),
                       checkmarkColor: cs.secondary,
                       labelStyle: TextStyle(
                         fontSize: 12.5,
-                        color: selected ? cs.secondary : null,
-                        fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                        color: labelColor,
+                        fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                       ),
                       side: BorderSide(
-                        color: selected ? cs.secondary.withValues(alpha: 0.5) : Theme.of(context).dividerColor,
+                        color: selected ? cs.secondary.withValues(alpha: 0.5) : chipBorder,
                       ),
                       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
                       visualDensity: VisualDensity.compact,

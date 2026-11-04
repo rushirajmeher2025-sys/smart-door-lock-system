@@ -26,19 +26,26 @@ class _BackdropState extends State<Backdrop> with SingleTickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) {
+    final isDark = AppColors.isDark(context);
+    final fallbackTint = isDark ? AppColors.darkTextPrimary : AppColors.brand;
+
     return TweenAnimationBuilder<Color?>(
-      tween: ColorTween(end: widget.tint ?? AppColors.textPrimary),
+      tween: ColorTween(end: widget.tint ?? fallbackTint),
       duration: const Duration(milliseconds: 900),
       curve: Curves.easeOutCubic,
       builder: (context, tint, child) => Stack(
         fit: StackFit.expand,
         children: [
-          const ColoredBox(color: AppColors.background),
+          ColoredBox(color: AppColors.backgroundOf(context)),
           RepaintBoundary(
             child: AnimatedBuilder(
               animation: _c,
               builder: (context, _) => CustomPaint(
-                painter: _BackdropPainter(Curves.easeInOut.transform(_c.value), tint ?? AppColors.textPrimary),
+                painter: _BackdropPainter(
+                  Curves.easeInOut.transform(_c.value),
+                  tint ?? fallbackTint,
+                  isDark: isDark,
+                ),
               ),
             ),
           ),
@@ -53,8 +60,9 @@ class _BackdropState extends State<Backdrop> with SingleTickerProviderStateMixin
 class _BackdropPainter extends CustomPainter {
   final double t;
   final Color tint;
+  final bool isDark;
 
-  _BackdropPainter(this.t, this.tint);
+  _BackdropPainter(this.t, this.tint, {required this.isDark});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -67,24 +75,29 @@ class _BackdropPainter extends CustomPainter {
       reach,
       Paint()
         ..shader = RadialGradient(
-          colors: [tint.withValues(alpha: 0.11 + 0.03 * t), tint.withValues(alpha: 0)],
+          colors: [
+            tint.withValues(alpha: isDark ? (0.11 + 0.03 * t) : (0.06 + 0.02 * t)),
+            tint.withValues(alpha: 0),
+          ],
         ).createShader(Rect.fromCircle(center: focus, radius: reach)),
     );
 
     // Dot grid that fades out away from the spotlight
     const gap = 22.0;
     final dot = Paint();
+    final baseDotColor = isDark ? Colors.white : Colors.black;
     for (double y = gap / 2; y < size.height * 0.75; y += gap) {
       for (double x = gap / 2; x < w; x += gap) {
         final d = (Offset(x, y) - focus).distance / reach;
-        final a = (1 - d).clamp(0.0, 1.0) * 0.07;
+        final a = (1 - d).clamp(0.0, 1.0) * (isDark ? 0.07 : 0.04);
         if (a < 0.004) continue;
-        dot.color = Colors.white.withValues(alpha: a);
+        dot.color = baseDotColor.withValues(alpha: a);
         canvas.drawCircle(Offset(x, y), 0.8, dot);
       }
     }
   }
 
   @override
-  bool shouldRepaint(covariant _BackdropPainter old) => old.t != t || old.tint != tint;
+  bool shouldRepaint(covariant _BackdropPainter old) =>
+      old.t != t || old.tint != tint || old.isDark != isDark;
 }

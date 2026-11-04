@@ -26,3 +26,4 @@
 
 # Application package
 -keep class com.smartlock.app.smart_door_lock.** { *; }
+

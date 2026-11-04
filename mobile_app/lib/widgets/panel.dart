@@ -29,9 +29,9 @@ class Panel extends StatelessWidget {
       curve: Curves.easeOutCubic,
       padding: padding,
       decoration: BoxDecoration(
-        color: color ?? AppColors.surface,
+        color: color ?? AppColors.surfaceOf(context),
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: borderColor ?? AppColors.hairline),
+        border: Border.all(color: borderColor ?? AppColors.hairlineOf(context)),
         boxShadow: [
           if (glow != null) BoxShadow(color: glow!.withValues(alpha: 0.16), blurRadius: 28, spreadRadius: -4),
         ],

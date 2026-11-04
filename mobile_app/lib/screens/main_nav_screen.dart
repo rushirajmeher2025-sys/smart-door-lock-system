@@ -83,11 +83,19 @@ class _MainNavScreenState extends State<MainNavScreen> {
 
     // Keep home screen widget in sync with lock state
     _widgetStateSub = _repository.stateStream.listen((state) {
-      final statusLabel = state.isLocked ? 'Locked' : state.isUnlocked ? 'Unlocked' : 'Unknown';
+      final statusLabel = state.isLocked ? 'Locked' : state.isUnlocked ? 'Unlocked' : 'Offline';
       LockWidgetService.instance.updateWidget(
         lockStatus: statusLabel,
         deviceName: _repository.activeDeviceName,
         isOnline: state.isOnline,
+      );
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final cur = _repository.currentState;
+      LockWidgetService.instance.updateWidget(
+        lockStatus: cur.isLocked ? 'Locked' : cur.isUnlocked ? 'Unlocked' : 'Offline',
+        deviceName: _repository.activeDeviceName,
+        isOnline: cur.isOnline,
       );
     });
   }
@@ -155,7 +163,7 @@ class _MainNavScreenState extends State<MainNavScreen> {
         return InAppNotificationBanner(
           onNotificationTap: () => _select(isOwner ? 2 : 1),
           child: Scaffold(
-            backgroundColor: AppColors.background,
+            backgroundColor: AppColors.backgroundOf(context),
             extendBody: true,
             body: IndexedStack(index: safeIndex, children: screens),
             bottomNavigationBar: SafeArea(
@@ -171,9 +179,9 @@ class _MainNavScreenState extends State<MainNavScreen> {
                       height: 60,
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: AppColors.surface.withValues(alpha: 0.82),
+                        color: AppColors.surfaceOf(context).withValues(alpha: 0.88),
                         borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: AppColors.hairline),
+                        border: Border.all(color: AppColors.hairlineOf(context)),
                       ),
                       child: LayoutBuilder(
                         builder: (context, box) {
@@ -190,9 +198,9 @@ class _MainNavScreenState extends State<MainNavScreen> {
                                 width: w,
                                 child: Container(
                                   decoration: BoxDecoration(
-                                    color: AppColors.surfaceLight,
+                                    color: AppColors.surfaceLightOf(context),
                                     borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+                                    border: Border.all(color: AppColors.isDark(context) ? Colors.white.withValues(alpha: 0.07) : Colors.black.withValues(alpha: 0.05)),
                                   ),
                                 ),
                               ),
@@ -249,7 +257,7 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? AppColors.textPrimary : AppColors.textMuted;
+    final color = active ? AppColors.textPrimaryOf(context) : AppColors.textMutedOf(context);
     return ExcludeSemantics(
       child: Stack(
         alignment: Alignment.center,

@@ -376,31 +376,90 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Reveal(
                     child: ValueListenableBuilder<ThemeMode>(
                       valueListenable: ThemeService.instance.themeModeNotifier,
-                      builder: (context, mode, _) =>
-                        SettingsGroup(
-                          title: 'Appearance',
-                          children: [
-                            ListTile(
-                              leading: const Icon(Icons.brightness_6_rounded),
-                              title: const Text('Theme'),
-                              subtitle: Text(ThemeService.instance.themeModeLabel),
-                              trailing: SegmentedButton<ThemeMode>(
-                                segments: const [
-                                  ButtonSegment(value: ThemeMode.light, label: Text('Light'), icon: Icon(Icons.light_mode_rounded, size: 15)),
-                                  ButtonSegment(value: ThemeMode.system, label: Text('Auto'), icon: Icon(Icons.brightness_auto_rounded, size: 15)),
-                                  ButtonSegment(value: ThemeMode.dark, label: Text('Dark'), icon: Icon(Icons.dark_mode_rounded, size: 15)),
-                                ],
-                                selected: {mode},
-                                onSelectionChanged: (vals) =>
-                                    ThemeService.instance.setThemeMode(vals.first),
-                                style: ButtonStyle(
-                                  visualDensity: VisualDensity.compact,
-                                  textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500)),
+                      builder: (context, mode, _) => SettingsGroup(
+                        title: 'Appearance',
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      mode == ThemeMode.light
+                                          ? Icons.light_mode_rounded
+                                          : mode == ThemeMode.dark
+                                              ? Icons.dark_mode_rounded
+                                              : Icons.brightness_auto_rounded,
+                                      size: 20,
+                                      color: Theme.of(context).colorScheme.secondary,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      'Theme',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textPrimaryOf(context),
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.surfaceLightOf(context),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        ThemeService.instance.themeModeLabel,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: Theme.of(context).colorScheme.secondary,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
+                                const SizedBox(height: 14),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: SegmentedButton<ThemeMode>(
+                                    segments: const [
+                                      ButtonSegment(
+                                        value: ThemeMode.light,
+                                        label: Text('Light'),
+                                        icon: Icon(Icons.light_mode_rounded, size: 16),
+                                      ),
+                                      ButtonSegment(
+                                        value: ThemeMode.system,
+                                        label: Text('Auto'),
+                                        icon: Icon(Icons.brightness_auto_rounded, size: 16),
+                                      ),
+                                      ButtonSegment(
+                                        value: ThemeMode.dark,
+                                        label: Text('Dark'),
+                                        icon: Icon(Icons.dark_mode_rounded, size: 16),
+                                      ),
+                                    ],
+                                    selected: {mode},
+                                    onSelectionChanged: (vals) =>
+                                        ThemeService.instance.setThemeMode(vals.first),
+                                    style: ButtonStyle(
+                                      visualDensity: VisualDensity.comfortable,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      textStyle: const WidgetStatePropertyAll(
+                                        TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 28),
@@ -416,11 +475,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 height: 46,
                                 alignment: Alignment.center,
                                 decoration: BoxDecoration(
-                                  color: AppColors.surfaceLight,
+                                  color: AppColors.surfaceLightOf(context),
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: AppColors.hairline),
+                                  border: Border.all(color: AppColors.hairlineOf(context)),
                                 ),
-                                child: Text(initial, style: AppTheme.display(fontSize: 18, letterSpacing: 0)),
+                                child: Text(initial, style: AppTheme.display(context: context, fontSize: 18, letterSpacing: 0)),
                               ),
                               const SizedBox(width: 14),
                               Expanded(
@@ -853,7 +912,7 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = valueColor ?? AppColors.textSecondary;
+    final color = valueColor ?? AppColors.textSecondaryOf(context);
     return ListTile(
       leading: Icon(icon),
       title: Text(title),
