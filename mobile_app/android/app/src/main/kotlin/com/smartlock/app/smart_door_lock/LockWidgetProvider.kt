@@ -1,24 +1,24 @@
 package com.smartlock.app.smart_door_lock
 
 import android.appwidget.AppWidgetManager
-import android.appwidget.AppWidgetProvider
 import android.content.Context
-import android.widget.RemoteViews
-import android.app.PendingIntent
+import android.content.SharedPreferences
 import android.net.Uri
-import es.antonborri.home_widget.HomeWidgetPlugin
+import android.widget.RemoteViews
+import es.antonborri.home_widget.HomeWidgetBackgroundIntent
+import es.antonborri.home_widget.HomeWidgetLaunchIntent
+import es.antonborri.home_widget.HomeWidgetProvider
 
-class LockWidgetProvider : AppWidgetProvider() {
+class LockWidgetProvider : HomeWidgetProvider() {
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
-        appWidgetIds: IntArray
+        appWidgetIds: IntArray,
+        widgetData: SharedPreferences
     ) {
         for (widgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.lock_widget_layout)
 
-            // Read saved widget data from HomeWidget plugin
-            val widgetData = HomeWidgetPlugin.getData(context)
             val lockStatus = widgetData.getString("lock_status", "Unknown") ?: "Unknown"
             val deviceName = widgetData.getString("device_name", "Lock") ?: "Lock"
             val isOnline = widgetData.getBoolean("is_online", false)
@@ -26,23 +26,19 @@ class LockWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_lock_status, if (!isOnline) "Offline" else lockStatus)
             views.setTextViewText(R.id.widget_device_name, deviceName)
 
-            // Tapping the icon button sends a lock action via HomeWidget background callback
-            val lockIntent = HomeWidgetPlugin.createBackgroundIntent(
+            // Tapping the lock button sends background broadcast to lock the door
+            val lockIntent = HomeWidgetBackgroundIntent.getBroadcast(
                 context,
-                Uri.parse("lockify://widget/lock_action"),
-                LockWidgetProvider::class.java
+                Uri.parse("lockify://widget/lock_action")
             )
             views.setOnClickPendingIntent(R.id.widget_lock_button, lockIntent)
 
-            // Tapping the widget body opens the app
-            val launchIntent = context.packageManager
-                .getLaunchIntentForPackage(context.packageName)
-            if (launchIntent != null) {
-                val pendingIntent = PendingIntent.getActivity(
-                    context, 0, launchIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
-            }
+            // Tapping the widget body launches the main activity
+            val launchIntent = HomeWidgetLaunchIntent.getActivity(
+                context,
+                MainActivity::class.java
+            )
+            views.setOnClickPendingIntent(R.id.widget_root, launchIntent)
 
             appWidgetManager.updateAppWidget(widgetId, views)
         }

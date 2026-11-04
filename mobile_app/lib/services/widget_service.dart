@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:home_widget/home_widget.dart';
 import '../models/remote_command.dart';
 import '../repositories/lock_repository.dart';
@@ -6,7 +7,8 @@ import '../services/firebase_init.dart';
 
 @pragma('vm:entry-point')
 Future<void> widgetBackgroundCallback(Uri? uri) async {
-  if (uri?.path == '/lock_action') {
+  WidgetsFlutterBinding.ensureInitialized();
+  if (uri?.toString().contains('lock_action') == true) {
     await FirebaseInitService.initialize();
     final repo = lockRepository();
     await repo.sendCommand(RemoteAction.lock);
