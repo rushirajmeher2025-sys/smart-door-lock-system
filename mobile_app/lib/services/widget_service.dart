@@ -26,7 +26,7 @@ class LockWidgetService {
   Future<void> initialize() async {
     if (kIsWeb) return;
     try {
-      await HomeWidget.registerBackgroundCallback(widgetBackgroundCallback);
+      await HomeWidget.registerInteractivityCallback(widgetBackgroundCallback);
       await HomeWidget.setAppGroupId('group.com.smartlock.app.smart_door_lock');
     } catch (e) {
       debugPrint('[Widget] Init error: $e');
