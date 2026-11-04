@@ -36,6 +36,181 @@ class AppTheme {
     return GoogleFonts.geistMono(fontSize: 11, color: color, fontWeight: FontWeight.w500, letterSpacing: 1.1);
   }
 
+  static ThemeData get lightTheme {
+    // Light-mode color constants (inlined; AppColors stays dark-only)
+    const Color lBackground = Color(0xFFF8F8FA);
+    const Color lSurface = Color(0xFFFFFFFF);
+    const Color lSurfaceLight = Color(0xFFF1F1F5);
+    const Color lHairline = Color(0xFFE4E4E7);
+    const Color lTextPrimary = Color(0xFF18181B);
+    const Color lTextSecondary = Color(0xFF52525B);
+    const Color lTextMuted = Color(0xFF8E8E93);
+    const Color lDivider = Color(0xFFE4E4E7);
+
+    final base = ThemeData(brightness: Brightness.light, useMaterial3: true);
+    final text = GoogleFonts.geistTextTheme(base.textTheme).apply(
+      bodyColor: lTextPrimary,
+      displayColor: lTextPrimary,
+    );
+
+    OutlineInputBorder field(Color color, [double width = 1]) =>
+        OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: color, width: width),
+        );
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: lBackground,
+      textTheme: text,
+      colorScheme: const ColorScheme.light(
+        primary: AppColors.primary,
+        secondary: AppColors.brand,
+        surface: lSurface,
+        error: AppColors.alarm,
+        onPrimary: lBackground,
+        onSurface: lTextPrimary,
+      ),
+      splashFactory: InkRipple.splashFactory,
+      highlightColor: Colors.black.withValues(alpha: 0.03),
+      splashColor: Colors.black.withValues(alpha: 0.05),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: false,
+      ),
+      dividerTheme: const DividerThemeData(color: lDivider, thickness: 1, space: 1),
+      listTileTheme: ListTileThemeData(
+        iconColor: lTextSecondary,
+        textColor: lTextPrimary,
+        minLeadingWidth: 22,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+        titleTextStyle: GoogleFonts.geist(color: lTextPrimary, fontSize: 15, fontWeight: FontWeight.w500, letterSpacing: -0.2),
+        subtitleTextStyle: GoogleFonts.geist(color: lTextMuted, fontSize: 13, height: 1.35),
+      ),
+      cardTheme: CardThemeData(
+        color: lSurface,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: lHairline),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: lSurfaceLight,
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(20)),
+          side: BorderSide(color: lHairline),
+        ),
+        titleTextStyle: GoogleFonts.geist(fontSize: 19, fontWeight: FontWeight.w600, color: lTextPrimary, letterSpacing: -0.4),
+        contentTextStyle: GoogleFonts.geist(color: lTextSecondary, fontSize: 14, height: 1.5),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: lSurfaceLight,
+        surfaceTintColor: Colors.transparent,
+        dragHandleColor: lTextMuted,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          side: BorderSide(color: lHairline),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: lSurfaceLight,
+        contentTextStyle: GoogleFonts.geist(color: lTextPrimary, fontSize: 14),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: lHairline),
+        ),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: lSurfaceLight,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: lHairline),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: lTextPrimary,
+          foregroundColor: lBackground,
+          disabledBackgroundColor: lSurfaceLight,
+          disabledForegroundColor: lTextMuted,
+          elevation: 0,
+          minimumSize: const Size(double.infinity, 52),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          textStyle: GoogleFonts.geist(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: -0.2),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: lTextPrimary,
+          foregroundColor: lBackground,
+          disabledBackgroundColor: lSurfaceLight,
+          disabledForegroundColor: lTextMuted,
+          minimumSize: const Size(88, 46),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          textStyle: GoogleFonts.geist(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: -0.2),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: lTextPrimary,
+          minimumSize: const Size(88, 46),
+          side: const BorderSide(color: lHairline),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          textStyle: GoogleFonts.geist(fontSize: 15, fontWeight: FontWeight.w500, letterSpacing: -0.2),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: lTextSecondary,
+          textStyle: GoogleFonts.geist(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: lSurface,
+        hintStyle: const TextStyle(color: lTextMuted, fontSize: 14),
+        labelStyle: const TextStyle(color: lTextMuted, fontSize: 14),
+        floatingLabelStyle: const TextStyle(color: lTextSecondary),
+        prefixIconColor: lTextMuted,
+        suffixIconColor: lTextMuted,
+        border: field(lHairline),
+        enabledBorder: field(lHairline),
+        focusedBorder: field(lTextSecondary),
+        errorBorder: field(AppColors.alarm),
+        focusedErrorBorder: field(AppColors.alarm),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          return states.contains(WidgetState.selected) ? lBackground : lTextSecondary;
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          return states.contains(WidgetState.selected) ? AppColors.brand : lSurfaceLight;
+        }),
+        trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+      ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(color: lTextPrimary),
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.iOS: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.macOS: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.fuchsia: FadeForwardsPageTransitionsBuilder(),
+        },
+      ),
+    );
+  }
+
   static ThemeData get darkTheme {
     final base = ThemeData(brightness: Brightness.dark, useMaterial3: true);
     final text = GoogleFonts.geistTextTheme(base.textTheme).apply(

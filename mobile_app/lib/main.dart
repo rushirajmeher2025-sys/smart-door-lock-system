@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'app/app.dart';
 import 'services/firebase_init.dart';
 import 'services/notification_service.dart';
+import 'services/theme_service.dart';
+import 'services/widget_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -20,6 +22,8 @@ Future<void> main() async {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   }
 
+  await ThemeService.instance.initialize();
   await NotificationService.instance.initialize();
+  await LockWidgetService.instance.initialize();
   runApp(const SmartLockApp());
 }

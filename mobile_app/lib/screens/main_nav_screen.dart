@@ -1,12 +1,14 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/access_request.dart';
+import '../models/lock_state.dart';
 import '../repositories/lock_repository.dart';
 import '../services/notification_service.dart';
+import '../services/widget_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/in_app_notification_banner.dart';
 import 'dashboard_screen.dart';
@@ -28,6 +30,7 @@ class _MainNavScreenState extends State<MainNavScreen> {
   VoidCallback? _accessListener;
   StreamSubscription<List<AccessRequest>>? _requestsSub;
   StreamSubscription<Map<String, dynamic>>? _notificationSub;
+  StreamSubscription<DoorLockState>? _widgetStateSub;
   int _pendingCount = 0;
 
   @override
@@ -77,12 +80,23 @@ class _MainNavScreenState extends State<MainNavScreen> {
       }
     };
     _repository.access.addListener(_accessListener!);
+
+    // Keep home screen widget in sync with lock state
+    _widgetStateSub = _repository.stateStream.listen((state) {
+      final statusLabel = state.isLocked ? 'Locked' : state.isUnlocked ? 'Unlocked' : 'Unknown';
+      LockWidgetService.instance.updateWidget(
+        lockStatus: statusLabel,
+        deviceName: _repository.activeDeviceName,
+        isOnline: state.isOnline,
+      );
+    });
   }
 
   @override
   void dispose() {
     _requestsSub?.cancel();
     _notificationSub?.cancel();
+    _widgetStateSub?.cancel();
     if (_accessListener != null) {
       _repository.access.removeListener(_accessListener!);
     }

@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/access_request.dart';
@@ -8,6 +8,7 @@ import '../services/auth_service.dart';
 import '../services/biometric_service.dart';
 import '../services/firebase_init.dart';
 import '../services/notification_service.dart';
+import '../services/theme_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../utils/constants.dart';
@@ -371,6 +372,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         : 'Member Portal · ${AppConstants.appName}',
                   ),
                   const SizedBox(height: 22),
+                  // ── Appearance ─────────────────────────────────────────
+                  Reveal(
+                    child: ValueListenableBuilder<ThemeMode>(
+                      valueListenable: ThemeService.instance.themeModeNotifier,
+                      builder: (context, mode, _) =>
+                        SettingsGroup(
+                          title: 'Appearance',
+                          children: [
+                            ListTile(
+                              leading: const Icon(Icons.brightness_6_rounded),
+                              title: const Text('Theme'),
+                              subtitle: Text(ThemeService.instance.themeModeLabel),
+                              trailing: SegmentedButton<ThemeMode>(
+                                segments: const [
+                                  ButtonSegment(value: ThemeMode.light, label: Text('Light'), icon: Icon(Icons.light_mode_rounded, size: 15)),
+                                  ButtonSegment(value: ThemeMode.system, label: Text('Auto'), icon: Icon(Icons.brightness_auto_rounded, size: 15)),
+                                  ButtonSegment(value: ThemeMode.dark, label: Text('Dark'), icon: Icon(Icons.dark_mode_rounded, size: 15)),
+                                ],
+                                selected: {mode},
+                                onSelectionChanged: (vals) =>
+                                    ThemeService.instance.setThemeMode(vals.first),
+                                style: ButtonStyle(
+                                  visualDensity: VisualDensity.compact,
+                                  textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
                   Reveal(
                     child: Panel(
                       child: Column(
