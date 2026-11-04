@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../models/security_event.dart';
 import '../repositories/lock_repository.dart';
+import 'firebase_init.dart';
 
 class NotificationService {
   NotificationService._();
@@ -73,9 +74,6 @@ class NotificationService {
           .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
 
       if (androidPlugin != null) {
-        // Request runtime permission on Android 13+
-        await androidPlugin.requestNotificationsPermission();
-
         const activityChannel = AndroidNotificationChannel(
           _channelActivityId,
           _channelActivityName,
@@ -96,6 +94,13 @@ class NotificationService {
 
         await androidPlugin.createNotificationChannel(activityChannel);
         await androidPlugin.createNotificationChannel(alarmChannel);
+
+        // Request runtime permission on Android 13+ safely
+        try {
+          await androidPlugin.requestNotificationsPermission();
+        } catch (e) {
+          debugPrint('Notification permission request skipped/failed: $e');
+        }
       }
 
       // Initialize Firebase Cloud Messaging (FCM) for background & terminated pushes
@@ -109,6 +114,10 @@ class NotificationService {
   }
 
   Future<void> _initializeFCM() async {
+    if (!FirebaseInitService.isConfigured) {
+      debugPrint('[FCM] Skipping FCM init: Firebase is not configured');
+      return;
+    }
     try {
       final messaging = FirebaseMessaging.instance;
 
@@ -212,7 +221,7 @@ class NotificationService {
 
   /// Subscribes this phone to the lock's push notification topic and stores FCM token
   Future<void> _registerDevicePush(String deviceId) async {
-    if (deviceId.isEmpty || deviceId == 'mock_device') return;
+    if (deviceId.isEmpty || deviceId == 'mock_device' || !FirebaseInitService.isConfigured) return;
 
     try {
       // Unsubscribe from previous device topic if changed

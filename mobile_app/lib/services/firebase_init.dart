@@ -35,7 +35,21 @@ class FirebaseInitService {
         FirebaseDatabase.instance.useDatabaseEmulator(emulatorHost, 9000);
         usingEmulator = true;
       } else {
-        await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+        try {
+          await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+        } on FirebaseException catch (e) {
+          if (e.code == 'duplicate-app' || e.message?.contains('already exists') == true) {
+            isConfigured = true;
+            return;
+          }
+          rethrow;
+        } catch (e) {
+          if (e.toString().contains('duplicate-app') || e.toString().contains('already exists')) {
+            isConfigured = true;
+            return;
+          }
+          rethrow;
+        }
       }
       isConfigured = true;
       if (kDebugMode) {

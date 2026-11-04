@@ -7,11 +7,15 @@ import '../services/firebase_init.dart';
 
 @pragma('vm:entry-point')
 Future<void> widgetBackgroundCallback(Uri? uri) async {
-  WidgetsFlutterBinding.ensureInitialized();
-  if (uri?.toString().contains('lock_action') == true) {
-    await FirebaseInitService.initialize();
-    final repo = lockRepository();
-    await repo.sendCommand(RemoteAction.lock);
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
+    if (uri?.toString().contains('lock_action') == true) {
+      await FirebaseInitService.initialize();
+      final repo = lockRepository();
+      await repo.sendCommand(RemoteAction.lock);
+    }
+  } catch (e) {
+    debugPrint('[Widget Background] Error: $e');
   }
 }
 
