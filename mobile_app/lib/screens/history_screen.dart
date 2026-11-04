@@ -237,7 +237,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   itemCount: _chips.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
                   itemBuilder: (context, i) {
                     final chip = _chips[i];
                     final selected = _activeChips.contains(i);
@@ -315,7 +315,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     if (_repository.eventsError != null && _allEvents.isEmpty) {
       return AppErrorView(
-        title: 'Couldn't load activity',
+        title: "Couldn't load activity",
         message: _repository.eventsError!,
         onRetry: _repository.retry,
       );
